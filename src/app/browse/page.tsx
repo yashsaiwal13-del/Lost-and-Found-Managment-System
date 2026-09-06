@@ -332,7 +332,9 @@ export default function BrowseFoundPage() {
 
                   {/* Title */}
                   <h3 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1">
-                    {item.title}
+                    <Link href={`/items/${item.id}`}>
+                      {item.title}
+                    </Link>
                   </h3>
 
                   {/* Description */}
@@ -369,16 +371,13 @@ export default function BrowseFoundPage() {
                   </span>
 
                   {/* 6. View Details Button (Requested) */}
-                  <button
-                    onClick={() => {
-                      setSelectedItem(item);
-                      setClaimSubmitted(false);
-                    }}
+                  <Link
+                    href={`/items/${item.id}`}
                     className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs active:scale-95 transition-all"
                   >
                     <span>View Details</span>
                     <ArrowUpRight className="h-3.5 w-3.5" />
-                  </button>
+                  </Link>
                 </div>
 
               </div>
