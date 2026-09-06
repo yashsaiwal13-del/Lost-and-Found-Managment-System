@@ -1,0 +1,396 @@
+import { 
+  CampusItem, 
+  Category, 
+  CampusFeature, 
+  HowItWorksStep, 
+  StudentStats, 
+  StudentReport, 
+  PossibleMatch 
+} from '@/types';
+
+export const CAMPUS_LOCATIONS: string[] = [
+  'All Locations',
+  'Central Library (Floors 1-4)',
+  'Student Union & Cafeteria',
+  'Science & Tech Complex',
+  'Engineering Lecture Hall A',
+  'Campus Sports & Recreation Gym',
+  'North Dormitory Common Area',
+  'Administration Block',
+];
+
+export const CATEGORIES: Category[] = [
+  'Electronics',
+  'IDs & Cards',
+  'Books & Notes',
+  'Keys & Access',
+  'Clothing & Accessories',
+  'Bags & Wallets',
+  'Bottles & Containers',
+  'Other',
+];
+
+export const MOCK_ITEMS: CampusItem[] = [
+  {
+    id: 'CF-101',
+    title: 'Apple AirPods Pro (2nd Gen)',
+    description: 'Found inside a white charging case with a small blue silicone astronaut keychain.',
+    type: 'found',
+    category: 'Electronics',
+    location: 'Central Library (Floors 1-4)',
+    date: 'Today, 10:15 AM',
+    dateIso: '2026-09-07',
+    daysAgo: 0,
+    status: 'open',
+    storageLocation: 'Main Security Desk - Locker #04',
+    reportedBy: {
+      role: 'security',
+      name: 'Officer Vance',
+    },
+  },
+  {
+    id: 'CF-102',
+    title: 'Student ID Card - Alex Morgan',
+    description: 'Sophomore CS student ID card with RFID badge and orange college lanyard.',
+    type: 'found',
+    category: 'IDs & Cards',
+    location: 'Student Union & Cafeteria',
+    date: 'Today, 8:40 AM',
+    dateIso: '2026-09-07',
+    daysAgo: 0,
+    status: 'open',
+    storageLocation: 'Student Union Info Desk',
+    reportedBy: {
+      role: 'staff',
+      name: 'Cafeteria Manager',
+    },
+  },
+  {
+    id: 'CF-103',
+    title: 'Texas Instruments TI-84 Plus CE',
+    description: 'Black graphic calculator with initials "J.D." etched on the back casing.',
+    type: 'found',
+    category: 'Electronics',
+    location: 'Engineering Lecture Hall A',
+    date: 'Yesterday, 3:30 PM',
+    dateIso: '2026-09-06',
+    daysAgo: 1,
+    status: 'open',
+    storageLocation: 'Engineering Department Front Office',
+    reportedBy: {
+      role: 'student',
+      name: 'Jordan Davis',
+    },
+  },
+  {
+    id: 'CF-104',
+    title: 'Hydro Flask 32oz (Pacific Blue)',
+    description: 'Wide-mouth vacuum insulated bottle covered with computer science and hackathon stickers.',
+    type: 'found',
+    category: 'Bottles & Containers',
+    location: 'Campus Sports & Recreation Gym',
+    date: 'Yesterday, 6:10 PM',
+    dateIso: '2026-09-06',
+    daysAgo: 1,
+    status: 'pending_verification',
+    storageLocation: 'Gym Front Reception',
+    reportedBy: {
+      role: 'staff',
+      name: 'Gym Attendant',
+    },
+  },
+  {
+    id: 'CF-105',
+    title: 'Car & Dorm Key Ring (Subaru Key + Brass FOB)',
+    description: 'Black key ring holding one electronic car key, brass room key #312, and a red bottle opener.',
+    type: 'found',
+    category: 'Keys & Access',
+    location: 'North Dormitory Common Area',
+    date: '2 days ago',
+    dateIso: '2026-09-05',
+    daysAgo: 2,
+    status: 'open',
+    storageLocation: 'Main Security Desk - Safe #2',
+    reportedBy: {
+      role: 'student',
+      name: 'Emma Watson',
+    },
+  },
+  {
+    id: 'CF-106',
+    title: 'North Face Surge Backpack (Grey)',
+    description: 'Contains a spiral notebook titled "Organic Chemistry II" and a grey pencil case.',
+    type: 'found',
+    category: 'Bags & Wallets',
+    location: 'Science & Tech Complex',
+    date: '2 days ago',
+    dateIso: '2026-09-05',
+    daysAgo: 2,
+    status: 'open',
+    storageLocation: 'Main Security Desk - Locker #11',
+    reportedBy: {
+      role: 'student',
+      name: 'Liam Chen',
+    },
+  },
+  {
+    id: 'CF-107',
+    title: 'Sony WH-1000XM4 Headphones (Black)',
+    description: 'Premium wireless headphones in original black zippered case with audio cable.',
+    type: 'found',
+    category: 'Electronics',
+    location: 'Central Library (Floors 1-4)',
+    date: '4 days ago',
+    dateIso: '2026-09-03',
+    daysAgo: 4,
+    status: 'open',
+    storageLocation: 'Library Front Circulation Counter',
+    reportedBy: {
+      role: 'staff',
+      name: 'Librarian Sarah',
+    },
+  },
+  {
+    id: 'CF-108',
+    title: 'Leather Bifold Wallet (Dark Brown)',
+    description: 'Contains state driver license and college meal plan card. Name starts with "M.K."',
+    type: 'found',
+    category: 'Bags & Wallets',
+    location: 'Administration Block',
+    date: '5 days ago',
+    dateIso: '2026-09-02',
+    daysAgo: 5,
+    status: 'open',
+    storageLocation: 'Main Security Desk - Safe #1',
+    reportedBy: {
+      role: 'security',
+      name: 'Officer Vance',
+    },
+  },
+  {
+    id: 'CF-109',
+    title: 'Campbell Biology 12th Edition Textbook',
+    description: 'Hardcover textbook with yellow highlights in Chapters 4-8. Left on Lab bench 3.',
+    type: 'found',
+    category: 'Books & Notes',
+    location: 'Science & Tech Complex',
+    date: '6 days ago',
+    dateIso: '2026-09-01',
+    daysAgo: 6,
+    status: 'open',
+    storageLocation: 'Science Complex Department Office',
+    reportedBy: {
+      role: 'staff',
+      name: 'Lab Assistant Dave',
+    },
+  },
+  {
+    id: 'CF-110',
+    title: 'Nike Club Fleece Zip Hoodie (Grey, M)',
+    description: 'Athletic grey zip hoodie left on bench near indoor basketball court.',
+    type: 'found',
+    category: 'Clothing & Accessories',
+    location: 'Campus Sports & Recreation Gym',
+    date: '12 days ago',
+    dateIso: '2026-08-26',
+    daysAgo: 12,
+    status: 'open',
+    storageLocation: 'Gym Front Reception',
+    reportedBy: {
+      role: 'staff',
+      name: 'Gym Attendant',
+    },
+  },
+  {
+    id: 'CF-111',
+    title: 'Dorm Lanyard with Student Card & USB Drive',
+    description: 'Navy blue college lanyard holding 64GB SanDisk USB drive and dorm swipe card.',
+    type: 'found',
+    category: 'IDs & Cards',
+    location: 'Engineering Lecture Hall A',
+    date: '15 days ago',
+    dateIso: '2026-08-23',
+    daysAgo: 15,
+    status: 'open',
+    storageLocation: 'Engineering Dean Reception',
+    reportedBy: {
+      role: 'staff',
+      name: 'Department Secretary',
+    },
+  },
+  {
+    id: 'CF-112',
+    title: 'Ray-Ban Classic Wayfarer Sunglasses',
+    description: 'Black polarized sunglasses inside brown Ray-Ban leather snap pouch.',
+    type: 'found',
+    category: 'Clothing & Accessories',
+    location: 'Student Union & Cafeteria',
+    date: '22 days ago',
+    dateIso: '2026-08-16',
+    daysAgo: 22,
+    status: 'open',
+    storageLocation: 'Student Union Info Counter',
+    reportedBy: {
+      role: 'student',
+      name: 'Carlos Ruiz',
+    },
+  },
+];
+
+export const HOW_IT_WORKS_STEPS: HowItWorksStep[] = [
+  {
+    step: '01',
+    title: 'Report Your Item',
+    description: 'Whether you lost an item or discovered an unattended one, log the details, photos, and campus location in 60 seconds.',
+    badge: 'Quick & Simple',
+  },
+  {
+    step: '02',
+    title: 'Smart Indexing & Matching',
+    description: 'CampusFind categorizes the item instantly. Students can browse the searchable live registry or get notified of matching items.',
+    badge: 'Real-time Feed',
+  },
+  {
+    step: '03',
+    title: 'Verified Security Claim',
+    description: 'Submit an ownership claim with identifying proof. Campus security verifies the details before handing over your belonging.',
+    badge: 'Safe & Secure',
+  },
+];
+
+export const CAMPUS_FEATURES: CampusFeature[] = [
+  {
+    title: 'Campus Security Custody',
+    description: 'Found items are held securely in designated campus security lockers until verified owners claim them.',
+    iconName: 'ShieldCheck',
+    badge: 'Official Oversight',
+  },
+  {
+    title: 'Precise Location Tagging',
+    description: 'Pinpoint exact campus spots like the Library 3rd Floor, Gym, Cafeteria, or specific Lecture Halls.',
+    iconName: 'MapPin',
+    badge: 'Campus Mapped',
+  },
+  {
+    title: 'Student ID & Privacy Protection',
+    description: 'Personal contact details are guarded. Only official security officers inspect sensitive ownership verification.',
+    iconName: 'Lock',
+    badge: 'Privacy First',
+  },
+  {
+    title: 'Live Claim Status Tracking',
+    description: 'Track your report or claim from "Submitted" to "Under Review by Security" to "Ready for Pickup".',
+    iconName: 'Clock',
+    badge: 'Transparency',
+  },
+  {
+    title: 'Smart Categorization',
+    description: 'Quickly filter through electronics, student ID cards, notebooks, wallets, and keys with one click.',
+    iconName: 'LayoutGrid',
+    badge: 'Organized',
+  },
+  {
+    title: 'Centralized Administrative Desk',
+    description: 'Campus security staff have an easy interface to log items turned in at help desks and manage approvals.',
+    iconName: 'FileCheck',
+    badge: 'Staff Ready',
+  },
+];
+
+export const STATS = [
+  { label: 'Belongings Reunited', value: '1,240+' },
+  { label: 'Campus Recovery Rate', value: '94%' },
+  { label: 'Avg. Claim Review Time', value: '< 2 hrs' },
+  { label: 'Designated Safe Pickup Desks', value: '5 Desks' },
+];
+
+/* -------------------------------------------------------------------------- */
+/*                        STUDENT DASHBOARD MOCK DATA                         */
+/* -------------------------------------------------------------------------- */
+
+export const STUDENT_PROFILE = {
+  name: 'Maya Lin',
+  studentId: 'STU-2024-8891',
+  email: 'maya.lin@campus.edu',
+  major: 'Computer Science',
+  year: 'Sophomore',
+  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+};
+
+export const STUDENT_STATS: StudentStats = {
+  totalReports: 4,
+  lostCount: 2,
+  foundCount: 2,
+  possibleMatches: 2,
+  pendingClaims: 1,
+  resolvedItems: 3,
+};
+
+export const STUDENT_REPORTS: StudentReport[] = [
+  {
+    id: 'REP-701',
+    title: 'Apple AirPods Pro (2nd Gen)',
+    description: 'Lost near 2nd floor silent study cubicles. White case with blue astronaut sticker.',
+    type: 'lost',
+    category: 'Electronics',
+    location: 'Central Library (Floors 1-4)',
+    dateReported: 'Today, 09:30 AM',
+    status: 'pending_verification',
+    matchesCount: 1,
+    matchedItemId: 'CF-101',
+    claimId: 'CLM-5501',
+  },
+  {
+    id: 'REP-702',
+    title: 'North Face Surge Backpack (Grey)',
+    description: 'Left in Chemistry Lab 102. Contains lecture notebooks and graph paper.',
+    type: 'lost',
+    category: 'Bags & Wallets',
+    location: 'Science & Tech Complex',
+    dateReported: 'Sep 05, 2026',
+    status: 'open',
+    matchesCount: 1,
+    matchedItemId: 'CF-106',
+  },
+  {
+    id: 'REP-703',
+    title: 'Set of Dorm Keys with Green Lanyard',
+    description: 'Found on bench outside North Dorm quad. Handed to security guard on duty.',
+    type: 'found',
+    category: 'Keys & Access',
+    location: 'North Dormitory Common Area',
+    dateReported: 'Sep 02, 2026',
+    status: 'resolved',
+    matchesCount: 0,
+  },
+  {
+    id: 'REP-704',
+    title: 'TI-84 Plus Graphic Calculator',
+    description: 'Found under desk in Lecture Hall B. Turned in to department reception.',
+    type: 'found',
+    category: 'Electronics',
+    location: 'Engineering Lecture Hall A',
+    dateReported: 'Aug 29, 2026',
+    status: 'resolved',
+    matchesCount: 0,
+  },
+];
+
+export const STUDENT_MATCHES: PossibleMatch[] = [
+  {
+    id: 'MATCH-01',
+    studentReportId: 'REP-701',
+    studentReportTitle: 'Apple AirPods Pro (2nd Gen)',
+    foundItem: MOCK_ITEMS[0], // CF-101
+    similarityScore: 96,
+    matchReason: 'Exact match on brand, campus building (Central Library), and astronaut keychain description.',
+  },
+  {
+    id: 'MATCH-02',
+    studentReportId: 'REP-702',
+    studentReportTitle: 'North Face Surge Backpack (Grey)',
+    foundItem: MOCK_ITEMS[5], // CF-106
+    similarityScore: 88,
+    matchReason: 'Location (Science Complex) and backpack color/brand match your lost item report.',
+  },
+];
