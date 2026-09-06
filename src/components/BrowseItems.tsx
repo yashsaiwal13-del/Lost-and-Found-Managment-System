@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { 
   Search, 
   MapPin, 
@@ -260,7 +261,9 @@ export default function BrowseItems({
 
                     {/* Item Title */}
                     <h3 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                      {item.title}
+                      <Link href={`/items/${item.id}`}>
+                        {item.title}
+                      </Link>
                     </h3>
 
                     {/* Description */}
@@ -294,17 +297,13 @@ export default function BrowseItems({
                     <span className="text-[11px] text-slate-400 font-mono">
                       Ref: #{item.id}
                     </span>
-                    <button
-                      onClick={() => setActiveModalItem(item)}
-                      className={`inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
-                        isFound
-                          ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs'
-                          : 'bg-white hover:bg-slate-100 text-slate-800 border border-slate-200'
-                      }`}
+                    <Link
+                      href={`/items/${item.id}`}
+                      className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-all"
                     >
-                      {isFound ? 'Submit Claim' : 'I Found This'}
+                      <span>View &amp; Claim</span>
                       <ArrowUpRight className="h-3 w-3" />
-                    </button>
+                    </Link>
                   </div>
 
                 </div>
