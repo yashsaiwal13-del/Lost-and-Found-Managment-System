@@ -23,6 +23,7 @@ import {
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { CATEGORIES, CAMPUS_LOCATIONS } from '@/data/mockData';
+import { submitFoundItemReport } from '@/app/actions/reportFound';
 
 interface FormState {
   itemName: string;
@@ -135,7 +136,7 @@ export default function ReportFoundPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validateForm()) {
@@ -148,13 +149,33 @@ export default function ReportFoundPage() {
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      const generatedRef = `CF-FND-${Math.floor(1000 + Math.random() * 9000)}`;
-      setReferenceId(generatedRef);
+    try {
+      const result = await submitFoundItemReport({
+        itemName: formData.itemName,
+        category: formData.category,
+        description: formData.description,
+        location: formData.location,
+        specificLocation: formData.specificLocation,
+        dateFound: formData.dateFound,
+        timeFound: formData.timeFound,
+        storageLocation: formData.storageLocation,
+        customStorage: formData.customStorage,
+        image: imagePreview,
+      });
+
+      if (result.success && result.item) {
+        setReferenceId(result.item.id);
+        setIsSubmitted(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        alert(result.error || 'Failed to submit report. Please check the fields.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('An unexpected error occurred. Please try again.');
+    } finally {
       setIsSubmitting(false);
-      setIsSubmitted(true);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 1200);
+    }
   };
 
   const handleReset = () => {

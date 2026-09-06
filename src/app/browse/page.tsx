@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   Search, 
@@ -14,16 +14,18 @@ import {
   CheckCircle2, 
   Clock, 
   Building2, 
-  SlidersHorizontal,
-  ChevronDown,
-  Info,
-  Sparkles,
-  ArrowUpDown
+  SlidersHorizontal, 
+  ChevronDown, 
+  Info, 
+  Sparkles, 
+  ArrowUpDown,
+  Loader2
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { CampusItem, Category } from '@/types';
 import { MOCK_ITEMS, CATEGORIES, CAMPUS_LOCATIONS } from '@/data/mockData';
+import { getFoundItemsFromDatabase } from '@/app/actions/getFoundItems';
 
 export default function BrowseFoundPage() {
   // Filter States
@@ -37,15 +39,50 @@ export default function BrowseFoundPage() {
   const [selectedItem, setSelectedItem] = useState<CampusItem | null>(null);
   const [claimSubmitted, setClaimSubmitted] = useState(false);
 
-  // Filter only found items
-  const foundItems = useMemo(() => {
-    return MOCK_ITEMS.filter((item) => item.type === 'found');
+  // Real found items loaded from PostgreSQL (with fallback to collegiate mock items)
+  const [foundItems, setFoundItems] = useState<CampusItem[]>(() =>
+    MOCK_ITEMS.filter((item) => item.type === 'found')
+  );
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch real found items from PostgreSQL database on mount
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoading(true);
+
+    getFoundItemsFromDatabase()
+      .then((items) => {
+        if (isMounted && items && items.length > 0) {
+          setFoundItems(items);
+        }
+      })
+      .catch((err) => {
+        console.warn('Database found items load notice:', err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  // Multi-criteria client-side live filtering
+  // Dynamic locations from campus defaults plus any custom locations in database
+  const locationOptions = useMemo(() => {
+    const list = [...CAMPUS_LOCATIONS];
+    foundItems.forEach((item) => {
+      if (item.location && !list.includes(item.location)) {
+        list.push(item.location);
+      }
+    });
+    return list;
+  }, [foundItems]);
+
+  // Multi-criteria client-side live filtering (Search, Category, Location, Date)
   const filteredItems = useMemo(() => {
     return foundItems.filter((item) => {
-      // 1. Search Query filter (matches title, description, or location)
+      // 1. Search Query filter (matches title, description, location, or custody storage)
       if (searchQuery.trim() !== '') {
         const query = searchQuery.toLowerCase();
         const matchesTitle = item.title.toLowerCase().includes(query);
@@ -62,9 +99,13 @@ export default function BrowseFoundPage() {
         return false;
       }
 
-      // 3. Location filter
-      if (selectedLocation !== 'All Locations' && item.location !== selectedLocation) {
-        return false;
+      // 3. Location filter (matches exact or substring e.g. "Main Library" matches "Main Library - 2nd Floor")
+      if (selectedLocation !== 'All Locations') {
+        const itemLoc = item.location.toLowerCase();
+        const selLoc = selectedLocation.toLowerCase();
+        if (!itemLoc.includes(selLoc) && item.location !== selectedLocation) {
+          return false;
+        }
       }
 
       // 4. Date filter (based on item.daysAgo)
@@ -236,7 +277,7 @@ export default function BrowseFoundPage() {
                 onChange={(e) => setSelectedLocation(e.target.value)}
                 className="w-full text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 cursor-pointer"
               >
-                {CAMPUS_LOCATIONS.map((loc) => (
+                {locationOptions.map((loc) => (
                   <option key={loc} value={loc}>
                     {loc}
                   </option>
