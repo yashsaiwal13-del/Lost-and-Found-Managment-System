@@ -111,34 +111,54 @@ export async function getFoundItemsFromDatabase(params?: GetFoundItemsParams): P
     // If database has no records yet (e.g. fresh installation before seeding), fallback to mock found items:
     return MOCK_ITEMS.filter((item) => item.type === 'found');
   } catch (error: any) {
-    console.warn('PostgreSQL note (falling back to mock items):', error?.message || error);
+    console.warn('Database note in getFoundItems (fetching from local dataStore):', error?.message || error);
     
-    // In local dev without active database service, apply filters directly on mock items:
-    let items = MOCK_ITEMS.filter((item) => item.type === 'found');
+    // Fetch from persistent dataStore
+    const { getItems } = await import('@/lib/dataStore');
+    const storeItems = await getItems({
+      type: 'FOUND',
+      category: params?.category,
+      search: params?.search,
+    });
 
-    if (params?.search?.trim()) {
-      const q = params.search.trim().toLowerCase();
-      items = items.filter(
-        (i) =>
-          i.title.toLowerCase().includes(q) ||
-          i.description.toLowerCase().includes(q) ||
-          i.location.toLowerCase().includes(q)
-      );
-    }
-    if (params?.category && params.category !== 'All') {
-      items = items.filter((i) => i.category === params.category);
-    }
+    const nowMs = Date.now();
+    let mapped: CampusItem[] = storeItems.map((item) => {
+      const itemDate = new Date(item.date);
+      const diffDays = Math.max(0, Math.floor((nowMs - itemDate.getTime()) / (1000 * 60 * 60 * 24)));
+      let statusFormat = item.status.toLowerCase();
+      if (statusFormat === 'pending_claim') statusFormat = 'pending_verification';
+
+      return {
+        id: item.id,
+        title: item.name,
+        description: item.description,
+        type: 'found',
+        category: item.category as any,
+        location: item.location,
+        date: itemDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        dateIso: item.date,
+        daysAgo: diffDays,
+        status: statusFormat as any,
+        imageUrl: item.image || undefined,
+        storageLocation: item.storageLocation || undefined,
+        reportedBy: {
+          role: 'student',
+          name: item.reportedByName || 'Campus Student',
+        },
+      };
+    });
+
     if (params?.location && params.location !== 'All Locations') {
       const locLower = params.location.toLowerCase();
-      items = items.filter((i) => i.location.toLowerCase().includes(locLower) || i.location === params.location);
+      mapped = mapped.filter((i) => i.location.toLowerCase().includes(locLower) || i.location === params.location);
     }
     if (params?.dateRange && params.dateRange !== 'all') {
-      if (params.dateRange === 'today') items = items.filter((i) => (i.daysAgo ?? 0) <= 0);
-      else if (params.dateRange === 'past3days') items = items.filter((i) => (i.daysAgo ?? 0) <= 3);
-      else if (params.dateRange === 'pastweek') items = items.filter((i) => (i.daysAgo ?? 0) <= 7);
-      else if (params.dateRange === 'pastmonth') items = items.filter((i) => (i.daysAgo ?? 0) <= 30);
+      if (params.dateRange === 'today') mapped = mapped.filter((i) => (i.daysAgo ?? 0) <= 0);
+      else if (params.dateRange === 'past3days') mapped = mapped.filter((i) => (i.daysAgo ?? 0) <= 3);
+      else if (params.dateRange === 'pastweek') mapped = mapped.filter((i) => (i.daysAgo ?? 0) <= 7);
+      else if (params.dateRange === 'pastmonth') mapped = mapped.filter((i) => (i.daysAgo ?? 0) <= 30);
     }
 
-    return items;
+    return mapped;
   }
 }
