@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   AlertCircle, 
   PlusCircle, 
@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { StudentReport, ItemStatus } from '@/types';
 import { STUDENT_REPORTS } from '@/data/mockData';
+import { getStudentReports } from '@/app/actions/getStudentReports';
 
 interface RecentReportsProps {
   filterType?: 'all' | 'lost' | 'found' | 'matches' | 'claims';
@@ -24,10 +25,62 @@ interface RecentReportsProps {
 
 export default function RecentReports({ filterType = 'all' }: RecentReportsProps) {
   const [activeFilter, setActiveFilter] = useState<string>(filterType);
+  const [reports, setReports] = useState<StudentReport[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedReport, setSelectedReport] = useState<StudentReport | null>(null);
 
+  const fetchReports = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/reports/user');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.reports) {
+          const formatted: StudentReport[] = data.reports.map((item: any) => {
+            let statusFormat = item.status?.toLowerCase();
+            if (statusFormat === 'pending_claim') statusFormat = 'pending_verification';
+
+            return {
+              id: item.id,
+              title: item.name,
+              description: item.description,
+              type: item.type?.toLowerCase() as any,
+              category: item.category as any,
+              location: item.location,
+              dateReported: new Date(item.date).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              }),
+              status: statusFormat as any,
+              matchesCount: item.type === 'LOST' ? 1 : 0,
+            };
+          });
+          setReports(formatted);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Fallback to Server Action
+      const actionData = await getStudentReports();
+      setReports(actionData || []);
+    } catch (err: any) {
+      console.error('Error loading reports:', err);
+      setError('Could not connect to database to load reports.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReports();
+  }, []);
+
   // Filter student reports
-  const filteredReports = STUDENT_REPORTS.filter((report) => {
+  const filteredReports = reports.filter((report) => {
     if (activeFilter === 'lost') return report.type === 'lost';
     if (activeFilter === 'found') return report.type === 'found';
     if (activeFilter === 'matches') return report.matchesCount > 0;
@@ -86,7 +139,7 @@ export default function RecentReports({ filterType = 'all' }: RecentReportsProps
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            All Reports ({STUDENT_REPORTS.length})
+            All Reports ({reports.length})
           </button>
           <button
             onClick={() => setActiveFilter('lost')}
@@ -96,7 +149,7 @@ export default function RecentReports({ filterType = 'all' }: RecentReportsProps
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            Lost ({STUDENT_REPORTS.filter((r) => r.type === 'lost').length})
+            Lost ({reports.filter((r) => r.type === 'lost').length})
           </button>
           <button
             onClick={() => setActiveFilter('found')}
@@ -106,7 +159,7 @@ export default function RecentReports({ filterType = 'all' }: RecentReportsProps
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            Found ({STUDENT_REPORTS.filter((r) => r.type === 'found').length})
+            Found ({reports.filter((r) => r.type === 'found').length})
           </button>
           <button
             onClick={() => setActiveFilter('matches')}
@@ -116,13 +169,51 @@ export default function RecentReports({ filterType = 'all' }: RecentReportsProps
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            Matches ({STUDENT_REPORTS.filter((r) => r.matchesCount > 0).length})
+            Matches ({reports.filter((r) => r.matchesCount > 0).length})
           </button>
         </div>
       </div>
 
+      {/* Loading State */}
+      {loading && (
+        <div className="p-8 text-center space-y-3">
+          <div className="h-6 w-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-xs text-slate-500 font-medium">Connecting to campus database &amp; loading reports...</p>
+        </div>
+      )}
+
+      {/* Error State */}
+      {!loading && error && (
+        <div className="p-6 text-center bg-red-50/60 border-b border-red-100">
+          <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+          <p className="text-xs font-semibold text-red-800">{error}</p>
+          <button
+            onClick={fetchReports}
+            className="mt-3 px-4 py-1.5 text-xs font-bold text-red-700 bg-white border border-red-200 rounded-lg hover:bg-red-50 shadow-2xs"
+          >
+            Retry Database Connection
+          </button>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && !error && filteredReports.length === 0 && (
+        <div className="p-12 text-center">
+          <div className="h-14 w-14 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-400">
+            <Search className="h-7 w-7" />
+          </div>
+          <h3 className="text-sm font-bold text-slate-800">No Reports Found</h3>
+          <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+            {activeFilter === 'all'
+              ? 'You have not submitted any lost or found reports yet. Reports you file will appear here.'
+              : `No ${activeFilter} reports currently match this filter.`}
+          </p>
+        </div>
+      )}
+
       {/* Reports List */}
-      <div className="divide-y divide-slate-100">
+      {!loading && !error && filteredReports.length > 0 && (
+        <div className="divide-y divide-slate-100">
         {filteredReports.map((report) => {
           const isLost = report.type === 'lost';
 
@@ -223,6 +314,7 @@ export default function RecentReports({ filterType = 'all' }: RecentReportsProps
           );
         })}
       </div>
+      )}
 
     </div>
   );

@@ -17,6 +17,9 @@ import { CATEGORIES, CAMPUS_LOCATIONS } from '@/data/mockData';
 export default function ReportSection() {
   const [activeTab, setActiveTab] = useState<'lost' | 'found'>('lost');
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [trackingId, setTrackingId] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     category: CATEGORIES[0],
@@ -27,21 +30,65 @@ export default function ReportSection() {
     contactEmail: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
-      setFormData({
-        title: '',
-        category: CATEGORIES[0],
-        location: CAMPUS_LOCATIONS[1],
-        date: '',
-        description: '',
-        contactName: '',
-        contactEmail: '',
+    setError(null);
+    setLoading(true);
+
+    try {
+      const endpoint = activeTab === 'lost' ? '/api/reports/lost' : '/api/reports/found';
+      const payload = activeTab === 'lost' ? {
+        itemName: formData.title,
+        category: formData.category,
+        location: formData.location,
+        dateLost: formData.date || new Date().toISOString(),
+        description: formData.description,
+        contactName: formData.contactName,
+        contactEmail: formData.contactEmail,
+      } : {
+        itemName: formData.title,
+        category: formData.category,
+        location: formData.location,
+        dateFound: formData.date || new Date().toISOString(),
+        description: formData.description,
+        storageLocation: 'Campus Security Central Desk',
+        contactName: formData.contactName,
+        contactEmail: formData.contactEmail,
+      };
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
-    }, 3500);
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setError(data.error || 'Failed to save report. Please verify input fields.');
+        setLoading(false);
+        return;
+      }
+
+      setTrackingId(data.item?.id || (activeTab === 'lost' ? 'LOST-8924' : 'FND-4310'));
+      setSubmitted(true);
+      setLoading(false);
+
+      setTimeout(() => {
+        setSubmitted(false);
+        setFormData({
+          title: '',
+          category: CATEGORIES[0],
+          location: CAMPUS_LOCATIONS[1],
+          date: '',
+          description: '',
+          contactName: '',
+          contactEmail: '',
+        });
+      }, 4000);
+    } catch (err: any) {
+      setError(err?.message || 'Network error submitting report.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -109,13 +156,21 @@ export default function ReportSection() {
                   ? 'Your report has been broadcasted to the campus lost registry. If a match is turned in to security, we will alert your student email.'
                   : 'Thank you for your honesty! Please drop the item off at the nearest Campus Security Desk (Building 4, Ground Floor) to receive custody confirmation.'}
               </p>
-              <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-xs font-mono text-slate-500">
-                Tracking Reference: #{activeTab === 'lost' ? 'LOST-8924' : 'FND-4310'}
+              <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-xs font-mono text-slate-700">
+                Tracking Reference: #{trackingId || (activeTab === 'lost' ? 'LOST-8924' : 'FND-4310')}
               </div>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
               
+              {/* Error Banner */}
+              {error && (
+                <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
+                  <span>{error}</span>
+                </div>
+              )}
+
               {/* Notice Banner */}
               <div className={`p-3.5 rounded-xl border flex items-start gap-3 text-xs ${
                 activeTab === 'lost'
@@ -268,13 +323,18 @@ export default function ReportSection() {
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200/80">
                 <button
                   type="submit"
-                  className={`w-full sm:w-auto px-6 py-3 rounded-xl text-xs font-bold text-white shadow-sm transition-all active:scale-[0.98] ${
+                  disabled={loading}
+                  className={`w-full sm:w-auto px-6 py-3 rounded-xl text-xs font-bold text-white shadow-sm transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed ${
                     activeTab === 'lost'
                       ? 'bg-rose-600 hover:bg-rose-700'
                       : 'bg-emerald-600 hover:bg-emerald-700'
                   }`}
                 >
-                  {activeTab === 'lost' ? 'Submit Lost Item Report' : 'Register Found Item'}
+                  {loading
+                    ? 'Submitting to database...'
+                    : activeTab === 'lost'
+                    ? 'Submit Lost Item Report'
+                    : 'Register Found Item'}
                 </button>
               </div>
 

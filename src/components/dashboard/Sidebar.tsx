@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { signOut } from 'next-auth/react';
 import { 
   Compass, 
   LayoutDashboard, 
@@ -15,6 +16,7 @@ import {
   LogOut
 } from 'lucide-react';
 import { STUDENT_PROFILE, STUDENT_STATS } from '@/data/mockData';
+import { getCurrentUser } from '@/app/actions/auth';
 
 interface SidebarProps {
   currentTab: string;
@@ -24,6 +26,17 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ currentTab, onTabChange, isOpen, onClose }: SidebarProps) {
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    getCurrentUser().then((u) => {
+      if (u) setCurrentUser(u);
+    });
+  }, []);
+
+  const displayName = currentUser?.name || STUDENT_PROFILE.name;
+  const displayId = currentUser?.studentId || STUDENT_PROFILE.studentId;
+
   const navItems = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'lost', label: 'My Lost Reports', icon: AlertCircle, badge: `${STUDENT_STATS.lostCount}` },
@@ -138,22 +151,22 @@ export default function Sidebar({ currentTab, onTabChange, isOpen, onClose }: Si
           <div className="bg-slate-800/70 border border-slate-700/60 rounded-xl p-3 flex items-center justify-between">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-xs shrink-0">
-                {STUDENT_PROFILE.name.charAt(0)}
+                {displayName.charAt(0)}
               </div>
               <div className="min-w-0">
                 <div className="text-xs font-semibold text-white truncate">
-                  {STUDENT_PROFILE.name}
+                  {displayName}
                 </div>
                 <div className="text-[10px] text-slate-400 font-mono truncate">
-                  {STUDENT_PROFILE.studentId}
+                  {displayId}
                 </div>
               </div>
             </div>
 
             <button
-              title="Sign Out (Mock)"
-              onClick={() => alert("Logged in as mock student: Maya Lin")}
-              className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg transition-colors"
+              title="Sign Out"
+              onClick={() => signOut({ callbackUrl: '/login' })}
+              className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-700/50 rounded-lg transition-colors cursor-pointer"
             >
               <LogOut className="h-4 w-4" />
             </button>

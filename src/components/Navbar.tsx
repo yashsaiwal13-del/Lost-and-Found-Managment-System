@@ -52,6 +52,12 @@ export default function Navbar() {
               <LayoutDashboard className="h-3.5 w-3.5" />
               Student Portal
             </Link>
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-slate-100 transition-colors"
+            >
+              Sign In
+            </Link>
           </nav>
 
           {/* Action CTAs (Desktop) */}
@@ -127,6 +133,13 @@ export default function Navbar() {
             >
               <Shield className="h-4 w-4 text-emerald-600" />
               Security Desk
+            </Link>
+            <Link
+              href="/login"
+              onClick={() => setMobileMenuOpen(false)}
+              className="px-3 py-2 rounded-lg bg-slate-50 text-indigo-600 font-semibold flex items-center gap-2"
+            >
+              Sign In / Register
             </Link>
           </nav>
 

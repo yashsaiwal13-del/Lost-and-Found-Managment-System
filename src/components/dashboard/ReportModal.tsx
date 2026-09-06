@@ -22,6 +22,8 @@ interface ReportModalProps {
 
 export default function ReportModal({ isOpen, type, onClose, onSuccess }: ReportModalProps) {
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     title: '',
     category: CATEGORIES[0],
@@ -34,14 +36,53 @@ export default function ReportModal({ isOpen, type, onClose, onSuccess }: Report
 
   const isLost = type === 'lost';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
-      onClose();
-      if (onSuccess) onSuccess();
-    }, 2200);
+    setError(null);
+    setLoading(true);
+
+    try {
+      const endpoint = isLost ? '/api/reports/lost' : '/api/reports/found';
+      const payload = isLost ? {
+        itemName: formData.title,
+        category: formData.category,
+        location: formData.location,
+        dateLost: new Date().toISOString(),
+        description: formData.description,
+      } : {
+        itemName: formData.title,
+        category: formData.category,
+        location: formData.location,
+        dateFound: new Date().toISOString(),
+        description: formData.description,
+        storageLocation: 'Campus Safety Central Desk',
+      };
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setError(data.error || 'Could not save report.');
+        setLoading(false);
+        return;
+      }
+
+      setSubmitted(true);
+      setLoading(false);
+
+      setTimeout(() => {
+        setSubmitted(false);
+        onClose();
+        if (onSuccess) onSuccess();
+      }, 1800);
+    } catch (err: any) {
+      setError(err?.message || 'Network error saving report.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -90,7 +131,14 @@ export default function ReportModal({ isOpen, type, onClose, onSuccess }: Report
               Logged to student profile: <span className="font-semibold text-slate-700">{STUDENT_PROFILE.name} ({STUDENT_PROFILE.studentId})</span>
             </p>
 
-            <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+            {error && (
+              <div className="mt-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="mt-4 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Item Title *
@@ -98,7 +146,7 @@ export default function ReportModal({ isOpen, type, onClose, onSuccess }: Report
                 <input
                   type="text"
                   required
-                  placeholder={isLost ? "e.g. iPad Air (Space Grey with Smart Folio)" : "e.g. Wireless Mouse"}
+                  placeholder={isLost ? "e.g., Space Gray MacBook Air, Blue Hydro Flask..." : "e.g., Set of keys, Black Dell Laptop..."}
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:bg-white"
@@ -113,7 +161,7 @@ export default function ReportModal({ isOpen, type, onClose, onSuccess }: Report
                   <select
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value as any })}
-                    className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500"
+                    className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:bg-white"
                   >
                     {CATEGORIES.map((cat) => (
                       <option key={cat} value={cat}>
@@ -125,14 +173,14 @@ export default function ReportModal({ isOpen, type, onClose, onSuccess }: Report
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Campus Location *
+                    Location {isLost ? 'Lost' : 'Found'} *
                   </label>
                   <select
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500"
+                    className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:bg-white"
                   >
-                    {CAMPUS_LOCATIONS.filter((l) => l !== 'All Locations').map((loc) => (
+                    {CAMPUS_LOCATIONS.map((loc) => (
                       <option key={loc} value={loc}>
                         {loc}
                       </option>
@@ -143,7 +191,7 @@ export default function ReportModal({ isOpen, type, onClose, onSuccess }: Report
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Description &amp; Identifying Details *
+                  Detailed Description *
                 </label>
                 <textarea
                   rows={3}
@@ -165,11 +213,12 @@ export default function ReportModal({ isOpen, type, onClose, onSuccess }: Report
                 </button>
                 <button
                   type="submit"
-                  className={`px-5 py-2 text-xs font-semibold text-white rounded-lg shadow-xs transition-all ${
+                  disabled={loading}
+                  className={`px-5 py-2 text-xs font-semibold text-white rounded-lg shadow-xs transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
                     isLost ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'
                   }`}
                 >
-                  {isLost ? 'Submit Lost Report' : 'Register Found Item'}
+                  {loading ? 'Saving report...' : isLost ? 'Submit Lost Report' : 'Register Found Item'}
                 </button>
               </div>
             </form>

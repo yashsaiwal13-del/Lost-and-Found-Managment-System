@@ -26,6 +26,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { MOCK_ITEMS, STUDENT_PROFILE } from '@/data/mockData';
 import { CampusItem } from '@/types';
+import { submitOwnershipClaim } from '@/app/actions/claims';
 
 export default function ItemDetailsPage() {
   const params = useParams();
@@ -77,7 +78,7 @@ export default function ItemDetailsPage() {
     return Object.keys(errors).length === 0;
   };
 
-  const handleClaimSubmit = (e: React.FormEvent) => {
+  const handleClaimSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validateClaim()) {
@@ -86,12 +87,26 @@ export default function ItemDetailsPage() {
 
     setIsSubmittingClaim(true);
 
-    setTimeout(() => {
-      const claimCode = `CLM-${Math.floor(1000 + Math.random() * 9000)}`;
-      setGeneratedClaimId(claimCode);
+    try {
+      const res = await submitOwnershipClaim({
+        itemId: item ? item.id : itemId,
+        color: claimData.exactColor,
+        uniqueMark: claimData.uniqueMark,
+        lastSeenLocation: claimData.lastSeenLocation,
+      });
+
+      if (res.success && res.claimId) {
+        setGeneratedClaimId(res.claimId);
+        setClaimSuccess(true);
+      } else {
+        alert(res.error || 'Could not submit claim. Please try again.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('An unexpected error occurred. Please try again.');
+    } finally {
       setIsSubmittingClaim(false);
-      setClaimSuccess(true);
-    }, 1200);
+    }
   };
 
   // Helper for status badge
