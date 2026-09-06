@@ -1,0 +1,182 @@
+// CampusFind - Prisma Schema for PostgreSQL
+// Documentation: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------
+// ENUMS
+// ------------------------------------------------------
+
+enum ItemType {
+  LOST
+  FOUND
+}
+
+enum ItemStatus {
+  REPORTED        // Initial submission status
+  OPEN            // Available / actively searching or held in custody
+  PENDING_CLAIM   // A student has submitted an ownership claim under review
+  RESOLVED        // Verified and returned to owner
+  REJECTED        // Closed without resolution
+}
+
+enum UserRole {
+  STUDENT
+  FACULTY
+  SECURITY
+  ADMIN
+}
+
+enum ClaimStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum MatchStatus {
+  SUGGESTED
+  CONFIRMED
+  DISMISSED
+}
+
+// ------------------------------------------------------
+// 1. ITEM MODEL (Primary Model)
+// ------------------------------------------------------
+model Item {
+  id                String     @id @default(cuid())
+  name              String // Item name (e.g. "Apple AirPods Pro", "Hydro Flask")
+  description       String // Full description & condition details
+  category          String // Category (Electronics, Drinkware, Keys, Bags, etc.)
+  type              ItemType // LOST or FOUND
+  location          String // Campus location (e.g. "Main Library, 2nd Floor")
+  date              DateTime // Date lost or found
+  time              String? // Optional time (e.g. "14:30")
+  image             String? // Item photo URL or storage path
+  status            ItemStatus @default(REPORTED)
+  storageLocation   String? // For FOUND items: custody locker/office (e.g. "Security Desk - Locker #B-14")
+  additionalDetails String? // For LOST items: private identifying details for security matching
+
+  // Reported by relation
+  reportedById String
+  reportedBy   User   @relation("UserReportedItems", fields: [reportedById], references: [id], onDelete: Cascade)
+
+  // Associated Claims
+  claims Claim[]
+
+  // Matches between lost and found items
+  lostMatches  Match[] @relation("LostItemMatches")
+  foundMatches Match[] @relation("FoundItemMatches")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+  @@index([type])
+  @@index([status])
+  @@index([reportedById])
+}
+
+// ------------------------------------------------------
+// 2. USER MODEL
+// ------------------------------------------------------
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  studentId String?  @unique
+  role      UserRole @default(STUDENT)
+  phone     String?
+  avatar    String?
+
+  // Relations
+  reportedItems Item[]         @relation("UserReportedItems")
+  claims        Claim[]        @relation("UserClaims")
+  notifications Notification[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([role])
+}
+
+// ------------------------------------------------------
+// 3. CLAIM MODEL
+// ------------------------------------------------------
+model Claim {
+  id String @id @default(cuid())
+
+  // Item being claimed
+  itemId String
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  // Claimant
+  claimantId String
+  claimant   User   @relation("UserClaims", fields: [claimantId], references: [id], onDelete: Cascade)
+
+  // Ownership verification answers
+  color            String // Question 1: What is the exact color?
+  uniqueMark       String // Question 2: What unique mark does it have?
+  lastSeenLocation String // Question 3: Where did you last see it?
+
+  status          ClaimStatus @default(PENDING)
+  rejectionReason String? // Explanation if rejected by security
+  reviewedBy      String? // Officer identifier (e.g. "Officer Vance (#SEC-402)")
+  resolvedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([itemId])
+  @@index([claimantId])
+  @@index([status])
+}
+
+// ------------------------------------------------------
+// 4. MATCH MODEL
+// ------------------------------------------------------
+model Match {
+  id String @id @default(cuid())
+
+  lostItemId String
+  lostItem   Item   @relation("LostItemMatches", fields: [lostItemId], references: [id], onDelete: Cascade)
+
+  foundItemId String
+  foundItem   Item   @relation("FoundItemMatches", fields: [foundItemId], references: [id], onDelete: Cascade)
+
+  similarityScore Float       @default(0.0) // Match confidence score (e.g. 0.94 = 94%)
+  status          MatchStatus @default(SUGGESTED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([lostItemId, foundItemId])
+  @@index([status])
+}
+
+// ------------------------------------------------------
+// 5. NOTIFICATION MODEL
+// ------------------------------------------------------
+model Notification {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title   String
+  message String
+  type    String // "MATCH_FOUND", "CLAIM_APPROVED", "CLAIM_REJECTED", "ITEM_LOGGED"
+  isRead  Boolean @default(false)
+  link    String? // Optional route to navigate to (e.g. "/dashboard", "/items/CF-101")
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+}
