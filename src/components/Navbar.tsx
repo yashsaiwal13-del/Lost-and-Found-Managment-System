@@ -41,10 +41,10 @@ export default function Navbar() {
             <a href="/#features" className="hover:text-indigo-600 transition-colors">
               Features
             </a>
-            <a href="/#security" className="hover:text-indigo-600 transition-colors flex items-center gap-1.5">
+            <Link href="/admin" className="hover:text-indigo-600 transition-colors flex items-center gap-1.5">
               <Shield className="h-4 w-4 text-emerald-600" />
               Security Desk
-            </a>
+            </Link>
             <Link
               href="/dashboard"
               className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition-colors"
@@ -120,14 +120,14 @@ export default function Navbar() {
             >
               Features
             </a>
-            <a
-              href="/#security"
+            <Link
+              href="/admin"
               onClick={() => setMobileMenuOpen(false)}
               className="px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-2"
             >
               <Shield className="h-4 w-4 text-emerald-600" />
               Security Desk
-            </a>
+            </Link>
           </nav>
 
           <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-2">

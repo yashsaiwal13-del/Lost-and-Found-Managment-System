@@ -76,3 +76,32 @@ export interface CampusFeature {
   iconName: string;
   badge?: string;
 }
+
+export type ClaimDecision = 'pending' | 'approved' | 'rejected';
+
+export interface AdminClaim {
+  id: string;
+  itemId: string;
+  itemTitle: string;
+  itemCategory: Category;
+  storageLocation: string;
+  claimantName: string;
+  studentId: string;
+  studentEmail: string;
+  submittedDate: string;
+  status: ClaimDecision;
+  rejectionReason?: string;
+  answers: {
+    exactColor: string;
+    uniqueMark: string;
+    lastSeenLocation: string;
+  };
+}
+
+export interface AdminStats {
+  totalLostReports: number;
+  totalFoundReports: number;
+  pendingClaims: number;
+  resolvedItems: number;
+}
+

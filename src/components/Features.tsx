@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 import { 
   ShieldCheck, 
   MapPin, 
@@ -100,13 +101,12 @@ export default function Features() {
             </div>
 
             <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
-              <button
-                type="button"
-                onClick={() => alert("Security Staff Portal is currently in development mode. Database integration will be enabled in the next phase!")}
-                className="w-full sm:w-auto px-6 py-3 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold rounded-xl transition-all shadow-md active:scale-95 text-center"
+              <Link
+                href="/admin"
+                className="w-full sm:w-auto px-6 py-3 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold rounded-xl transition-all shadow-md active:scale-95 text-center inline-flex items-center justify-center gap-2"
               >
                 Access Security Dashboard
-              </button>
+              </Link>
             </div>
           </div>
         </div>

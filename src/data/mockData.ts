@@ -5,7 +5,9 @@ import {
   HowItWorksStep, 
   StudentStats, 
   StudentReport, 
-  PossibleMatch 
+  PossibleMatch,
+  AdminClaim,
+  AdminStats
 } from '@/types';
 
 export const CAMPUS_LOCATIONS: string[] = [
@@ -394,3 +396,77 @@ export const STUDENT_MATCHES: PossibleMatch[] = [
     matchReason: 'Location (Science Complex) and backpack color/brand match your lost item report.',
   },
 ];
+
+/* -------------------------------------------------------------------------- */
+/*                         ADMIN / SECURITY MOCK DATA                         */
+/* -------------------------------------------------------------------------- */
+
+export const OFFICER_PROFILE = {
+  name: 'Officer Vance',
+  badgeNumber: 'SEC-402',
+  department: 'Campus Safety & Dispatch Division',
+  assignedStation: 'Administration Complex, Building 4 (Room 102)',
+  shift: 'Day Shift (07:00 – 16:00)',
+};
+
+export const ADMIN_STATS: AdminStats = {
+  totalLostReports: 14,
+  totalFoundReports: 28,
+  pendingClaims: 3,
+  resolvedItems: 42,
+};
+
+export const ADMIN_CLAIMS: AdminClaim[] = [
+  {
+    id: 'CLM-5501',
+    itemId: 'CF-101',
+    itemTitle: 'Apple AirPods Pro (2nd Gen)',
+    itemCategory: 'Electronics',
+    storageLocation: 'Main Security Desk - Locker #04',
+    claimantName: 'Maya Lin',
+    studentId: 'STU-2024-8891',
+    studentEmail: 'maya.lin@campus.edu',
+    submittedDate: 'Today, 11:20 AM',
+    status: 'pending',
+    answers: {
+      exactColor: 'White case with slight scratch on bottom hinge',
+      uniqueMark: 'Blue silicone astronaut keychain attached to charging loop, named "Maya" in Bluetooth settings',
+      lastSeenLocation: 'Central Library 2nd Floor silent study cubicle #14',
+    },
+  },
+  {
+    id: 'CLM-5502',
+    itemId: 'CF-104',
+    itemTitle: 'Hydro Flask 32oz (Pacific Blue)',
+    itemCategory: 'Bottles & Containers',
+    storageLocation: 'Gym Front Reception',
+    claimantName: 'Jordan Davis',
+    studentId: 'STU-2023-4412',
+    studentEmail: 'jordan.d@campus.edu',
+    submittedDate: 'Yesterday, 07:15 PM',
+    status: 'pending',
+    answers: {
+      exactColor: 'Pacific Blue with black flex cap',
+      uniqueMark: 'Covered with CS Club, GitHub Octocat, and Hackathon 2025 stickers; dent on bottom rim',
+      lastSeenLocation: 'Campus Recreation Gym, beside bench press station 3',
+    },
+  },
+  {
+    id: 'CLM-5503',
+    itemId: 'CF-108',
+    itemTitle: 'Leather Bifold Wallet (Dark Brown)',
+    itemCategory: 'Bags & Wallets',
+    storageLocation: 'Main Security Desk - Safe #1',
+    claimantName: 'Marcus King',
+    studentId: 'STU-2025-9921',
+    studentEmail: 'm.king@campus.edu',
+    submittedDate: 'Sep 05, 2026',
+    status: 'pending',
+    answers: {
+      exactColor: 'Distressed dark brown genuine leather',
+      uniqueMark: 'Contains state driver license under name Marcus King, university dining card #9921, and library card',
+      lastSeenLocation: 'Administration Building hallway bench outside Registrar Office',
+    },
+  },
+];
+
