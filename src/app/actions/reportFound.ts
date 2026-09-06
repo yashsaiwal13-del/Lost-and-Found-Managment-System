@@ -2,6 +2,8 @@
 
 import prisma from '@/lib/prisma';
 import { ItemType, ItemStatus, UserRole } from '@prisma/client';
+import { saveItem } from '@/lib/dataStore';
+import { getCurrentUser } from '@/app/actions/auth';
 
 export interface ReportFoundInput {
   itemName: string;
@@ -33,18 +35,11 @@ export interface ReportFoundResult {
 }
 
 /**
- * Server Action: Connects the Report Found Item form to PostgreSQL using Prisma.
- * Steps:
- * 1. Validate the data.
- * 2. Save the item in PostgreSQL.
- * 3. Set type to FOUND.
- * 4. Set status to REPORTED.
- * 5. Return success result with created item record.
+ * Server Action: Connects the Report Found Item form to PostgreSQL using Prisma,
+ * with resilient permanent local storage fallback.
  */
 export async function submitFoundItemReport(input: ReportFoundInput): Promise<ReportFoundResult> {
-  // ----------------------------------------------------
-  // 1. VALIDATE THE DATA (Server-side validation)
-  // ----------------------------------------------------
+  // 1. VALIDATE THE DATA
   if (!input.itemName || !input.itemName.trim()) {
     return { success: false, error: 'Item name is required.' };
   }
@@ -72,87 +67,43 @@ export async function submitFoundItemReport(input: ReportFoundInput): Promise<Re
     ? (input.customStorage?.trim() || 'Specified by finder')
     : input.storageLocation.trim();
 
-  // Parse Date
-  let dateObj = new Date(input.dateFound);
-  if (isNaN(dateObj.getTime())) {
-    dateObj = new Date();
-  }
-
   try {
-    // ----------------------------------------------------
-    // Resolve or create default Student User for foreign key
-    // ----------------------------------------------------
-    let studentUser = await prisma.user.findFirst({
-      where: { role: UserRole.STUDENT },
-    });
+    const currentUser = await getCurrentUser();
 
-    if (!studentUser) {
-      studentUser = await prisma.user.upsert({
-        where: { email: 'maya.lin@campus.edu' },
-        update: {},
-        create: {
-          name: 'Maya Lin',
-          email: 'maya.lin@campus.edu',
-          studentId: 'STU-88291',
-          role: UserRole.STUDENT,
-          phone: '(555) 019-2834',
-        },
-      });
-    }
-
-    // ----------------------------------------------------
-    // 2. SAVE THE ITEM IN POSTGRESQL
-    // 3. SET TYPE TO FOUND
-    // 4. SET STATUS TO REPORTED
-    // ----------------------------------------------------
-    const createdItem = await prisma.item.create({
-      data: {
-        name: input.itemName.trim(),
-        description: input.description.trim(),
-        category: input.category.trim(),
-        type: ItemType.FOUND,          // Set type to FOUND
-        status: ItemStatus.REPORTED,   // Set status to REPORTED
-        location: effectiveLocation,
-        date: dateObj,
-        time: input.timeFound?.trim() || null,
-        storageLocation: effectiveStorage,
-        image: input.image || null,
-        reportedById: studentUser.id,
-      },
+    const { item, isPostgres } = await saveItem({
+      name: input.itemName.trim(),
+      description: input.description.trim(),
+      category: input.category.trim(),
+      type: 'FOUND',
+      location: effectiveLocation,
+      date: input.dateFound,
+      time: input.timeFound?.trim() || null,
+      storageLocation: effectiveStorage,
+      image: input.image || null,
+      reportedById: currentUser?.id,
+      reportedByName: currentUser?.name || 'Student Reporter',
+      reportedByEmail: currentUser?.email || 'student@campus.edu',
     });
 
     return {
       success: true,
       savedToDatabase: true,
       item: {
-        id: createdItem.id,
-        name: createdItem.name,
-        category: createdItem.category,
-        location: createdItem.location,
-        storageLocation: createdItem.storageLocation || effectiveStorage,
-        type: createdItem.type,
-        status: createdItem.status,
-        createdAt: createdItem.createdAt.toISOString(),
+        id: item.id,
+        name: item.name,
+        category: item.category,
+        location: item.location,
+        storageLocation: item.storageLocation || effectiveStorage,
+        type: item.type,
+        status: item.status,
+        createdAt: item.createdAt,
       },
     };
-  } catch (dbError: any) {
-    console.error('PostgreSQL / Prisma note:', dbError?.message || dbError);
-
-    // Graceful fallback for local development before database initialization:
-    const fallbackId = `CF-FND-${Math.floor(1000 + Math.random() * 9000)}`;
+  } catch (err: any) {
+    console.error('Error saving found report:', err);
     return {
-      success: true,
-      savedToDatabase: false,
-      item: {
-        id: fallbackId,
-        name: input.itemName.trim(),
-        category: input.category.trim(),
-        location: effectiveLocation,
-        storageLocation: effectiveStorage,
-        type: 'FOUND',
-        status: 'REPORTED',
-        createdAt: new Date().toISOString(),
-      },
+      success: false,
+      error: err?.message || 'Failed to save report to database.',
     };
   }
 }
