@@ -37,8 +37,8 @@ export default function ItemDetailsPage() {
     return MOCK_ITEMS.find((i) => i.id.toLowerCase() === itemId.toLowerCase());
   }, [itemId]);
 
-  // Claim Form State
-  const [showClaimForm, setShowClaimForm] = useState(false);
+  // Claim Form State (Visible so student can verify immediately)
+  const [showClaimForm, setShowClaimForm] = useState(true);
   const [claimData, setClaimData] = useState({
     exactColor: '',
     uniqueMark: '',
