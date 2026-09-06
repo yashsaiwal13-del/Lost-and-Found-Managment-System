@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   ShieldCheck, 
@@ -40,9 +40,11 @@ import {
   CAMPUS_LOCATIONS 
 } from '@/data/mockData';
 import { AdminClaim, CampusItem, ClaimDecision } from '@/types';
+import { getAdminClaims, approveClaim, rejectClaim } from '@/app/actions/claims';
+import { getCurrentUser } from '@/app/actions/auth';
 
 export default function AdminSecurityDashboard() {
-  // Claims State (for interactive approvals/rejections)
+  // Claims State (loaded from PostgreSQL database with fallback to collegiate mock claims)
   const [claims, setClaims] = useState<AdminClaim[]>(ADMIN_CLAIMS);
   const [selectedClaim, setSelectedClaim] = useState<AdminClaim | null>(null);
   const [inspectModalOpen, setInspectModalOpen] = useState(false);
@@ -51,6 +53,22 @@ export default function AdminSecurityDashboard() {
 
   // Notification Banner
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // Load real claims and current session user on mount
+  useEffect(() => {
+    getAdminClaims().then((data) => {
+      if (data && data.length > 0) {
+        setClaims(data);
+      }
+    });
+
+    getCurrentUser().then((user) => {
+      if (user) {
+        setCurrentUser(user);
+      }
+    });
+  }, []);
 
   // Reports Table State
   const [reportFilter, setReportFilter] = useState<'all' | 'lost' | 'found' | 'resolved'>('all');
@@ -69,19 +87,27 @@ export default function AdminSecurityDashboard() {
     };
   }, [claims]);
 
-  // Handle Approve Claim
-  const handleApproveClaim = (claimId: string) => {
+  // Handle Approve Claim (Updates Claim to APPROVED and Item to RESOLVED in PostgreSQL)
+  const handleApproveClaim = async (claimId: string) => {
+    // 1. Call server action to update database
+    await approveClaim(claimId, currentUser?.name || OFFICER_PROFILE.name);
+
+    // 2. Update local UI state immediately
     setClaims((prev) =>
       prev.map((c) => (c.id === claimId ? { ...c, status: 'approved' as ClaimDecision } : c))
     );
     const target = claims.find((c) => c.id === claimId);
-    setAlertMessage(`Claim ${claimId} for "${target?.itemTitle}" has been APPROVED. Claimant notified to collect at ${target?.storageLocation}.`);
+    setAlertMessage(`Claim ${claimId} for "${target?.itemTitle}" has been APPROVED. Item status updated to RESOLVED.`);
     setInspectModalOpen(false);
     setTimeout(() => setAlertMessage(null), 5000);
   };
 
-  // Handle Reject Claim
-  const handleRejectClaim = (claimId: string) => {
+  // Handle Reject Claim (Updates Claim to REJECTED in PostgreSQL)
+  const handleRejectClaim = async (claimId: string) => {
+    // 1. Call server action to update database
+    await rejectClaim(claimId, rejectionReason, currentUser?.name || OFFICER_PROFILE.name);
+
+    // 2. Update local UI state immediately
     setClaims((prev) =>
       prev.map((c) =>
         c.id === claimId
@@ -89,7 +115,7 @@ export default function AdminSecurityDashboard() {
           : c
       )
     );
-    setAlertMessage(`Claim ${claimId} has been REJECTED. Status updated in security log.`);
+    setAlertMessage(`Claim ${claimId} has been REJECTED. Reason recorded in security custody log.`);
     setRejectPromptClaim(null);
     setInspectModalOpen(false);
     setTimeout(() => setAlertMessage(null), 5000);
