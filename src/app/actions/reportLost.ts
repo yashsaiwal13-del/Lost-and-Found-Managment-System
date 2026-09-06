@@ -2,6 +2,8 @@
 
 import prisma from '@/lib/prisma';
 import { ItemType, ItemStatus, UserRole } from '@prisma/client';
+import { saveItem } from '@/lib/dataStore';
+import { getCurrentUser } from '@/app/actions/auth';
 
 export interface ReportLostInput {
   itemName: string;
@@ -63,85 +65,42 @@ export async function submitLostItemReport(input: ReportLostInput): Promise<Repo
     ? `${input.location.trim()} (${input.specificLocation.trim()})`
     : input.location.trim();
 
-  // Parse Date
-  let dateObj = new Date(input.dateLost);
-  if (isNaN(dateObj.getTime())) {
-    dateObj = new Date();
-  }
-
   try {
-    // ----------------------------------------------------
-    // Resolve or create default Student User for foreign key
-    // ----------------------------------------------------
-    let studentUser = await prisma.user.findFirst({
-      where: { role: UserRole.STUDENT },
-    });
+    const currentUser = await getCurrentUser();
 
-    if (!studentUser) {
-      studentUser = await prisma.user.upsert({
-        where: { email: 'maya.lin@campus.edu' },
-        update: {},
-        create: {
-          name: 'Maya Lin',
-          email: 'maya.lin@campus.edu',
-          studentId: 'STU-88291',
-          role: UserRole.STUDENT,
-          phone: '(555) 019-2834',
-        },
-      });
-    }
-
-    // ----------------------------------------------------
-    // 2. SAVE THE ITEM IN POSTGRESQL
-    // 3. SET TYPE TO LOST
-    // 4. SET STATUS TO REPORTED
-    // ----------------------------------------------------
-    const createdItem = await prisma.item.create({
-      data: {
-        name: input.itemName.trim(),
-        description: input.description.trim(),
-        category: input.category.trim(),
-        type: ItemType.LOST,          // Set type to LOST
-        status: ItemStatus.REPORTED,   // Set status to REPORTED
-        location: effectiveLocation,
-        date: dateObj,
-        time: input.timeLost?.trim() || null,
-        image: input.image || null,
-        additionalDetails: input.additionalDetails?.trim() || null,
-        reportedById: studentUser.id,
-      },
+    const { item, isPostgres } = await saveItem({
+      name: input.itemName.trim(),
+      description: input.description.trim(),
+      category: input.category.trim(),
+      type: 'LOST',
+      location: effectiveLocation,
+      date: input.dateLost,
+      time: input.timeLost?.trim() || null,
+      image: input.image || null,
+      additionalDetails: input.additionalDetails?.trim() || null,
+      reportedById: currentUser?.id,
+      reportedByName: currentUser?.name || 'Maya Lin',
+      reportedByEmail: currentUser?.email || 'maya.lin@campus.edu',
     });
 
     return {
       success: true,
       savedToDatabase: true,
       item: {
-        id: createdItem.id,
-        name: createdItem.name,
-        category: createdItem.category,
-        location: createdItem.location,
-        type: createdItem.type,
-        status: createdItem.status,
-        createdAt: createdItem.createdAt.toISOString(),
+        id: item.id,
+        name: item.name,
+        category: item.category,
+        location: item.location,
+        type: item.type,
+        status: item.status,
+        createdAt: item.createdAt,
       },
     };
-  } catch (dbError: any) {
-    console.error('PostgreSQL / Prisma note:', dbError?.message || dbError);
-
-    // Graceful fallback for display before database initialization:
-    const fallbackId = `CF-LOST-${Math.floor(1000 + Math.random() * 9000)}`;
+  } catch (err: any) {
+    console.error('Error saving lost report:', err);
     return {
-      success: true,
-      savedToDatabase: false,
-      item: {
-        id: fallbackId,
-        name: input.itemName.trim(),
-        category: input.category.trim(),
-        location: effectiveLocation,
-        type: 'LOST',
-        status: 'REPORTED',
-        createdAt: new Date().toISOString(),
-      },
+      success: false,
+      error: err?.message || 'Failed to save report to database.',
     };
   }
 }
