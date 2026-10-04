@@ -11,7 +11,8 @@ import {
   ArrowRight,
   Sparkles
 } from 'lucide-react';
-import { CAMPUS_LOCATIONS, STATS } from '@/data/mockData';
+import { STATS } from '@/lib/constants';
+import { CAMPUS_LOCATIONS } from '@/lib/campusLocations';
 
 interface HeroProps {
   onSearchChange?: (query: string) => void;
@@ -82,13 +83,13 @@ export default function Hero({ onSearchChange, onLocationChange }: HeroProps) {
               Report Found Item
             </a>
 
-            {/* Button 3: Browse Found Items */}
+            {/* Button 3: Student Portal & Dashboard */}
             <a
-              href="/browse"
+              href="/dashboard"
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl text-sm font-semibold text-slate-800 bg-white hover:bg-slate-50 border border-slate-300 active:scale-[0.98] shadow-xs hover:border-slate-400 transition-all duration-200"
             >
-              <Search className="h-4 w-4 text-indigo-600" />
-              Browse Found Items
+              <Sparkles className="h-4 w-4 text-indigo-600" />
+              Student Dashboard
             </a>
 
           </div>

@@ -1,4 +1,4 @@
-// CampusFind - Prisma Schema for PostgreSQL
+// CampusFind - Prisma Schema
 // Documentation: https://pris.ly/d/prisma-schema
 
 generator client {
@@ -6,62 +6,37 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
-}
-
-// ------------------------------------------------------
-// ENUMS
-// ------------------------------------------------------
-
-enum ItemType {
-  LOST
-  FOUND
-}
-
-enum ItemStatus {
-  REPORTED        // Initial submission status
-  OPEN            // Available / actively searching or held in custody
-  PENDING_CLAIM   // A student has submitted an ownership claim under review
-  RESOLVED        // Verified and returned to owner
-  REJECTED        // Closed without resolution
-}
-
-enum UserRole {
-  STUDENT
-  FACULTY
-  SECURITY
-  ADMIN
-}
-
-enum ClaimStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
-enum MatchStatus {
-  SUGGESTED
-  CONFIRMED
-  DISMISSED
 }
 
 // ------------------------------------------------------
 // 1. ITEM MODEL (Primary Model)
 // ------------------------------------------------------
 model Item {
-  id                String     @id @default(cuid())
-  name              String // Item name (e.g. "Apple AirPods Pro", "Hydro Flask")
-  description       String // Full description & condition details
-  category          String // Category (Electronics, Drinkware, Keys, Bags, etc.)
-  type              ItemType // LOST or FOUND
-  location          String // Campus location (e.g. "Main Library, 2nd Floor")
+  id                String   @id @default(cuid())
+  name              String   // Item name (e.g. "Apple AirPods Pro", "Hydro Flask")
+  description       String   // Full description & condition details
+  category          String   // Category (Electronics, Drinkware, Keys, Bags, etc.)
+  type              String   // LOST or FOUND
+  location          String   // Campus location (e.g. "Main Library, 2nd Floor")
   date              DateTime // Date lost or found
-  time              String? // Optional time (e.g. "14:30")
-  image             String? // Item photo URL or storage path
-  status            ItemStatus @default(REPORTED)
-  storageLocation   String? // For FOUND items: custody locker/office (e.g. "Security Desk - Locker #B-14")
-  additionalDetails String? // For LOST items: private identifying details for security matching
+  time              String?  // Optional time (e.g. "14:30")
+  image             String?  // Item photo URL or storage path
+  status            String   @default("REPORTED") // REPORTED, PENDING_REVIEW, OPEN, VERIFICATION_REQUIRED, AWAITING_STUDENT_ANSWERS, ANSWERS_SUBMITTED, VERIFIED, ITEM_RETURNED, RESOLVED, REJECTED, ARCHIVED
+  storageLocation   String?  // For FOUND items: custody locker/office (e.g. "Security Desk - Locker #B-14")
+  additionalDetails String?  // For LOST items: private identifying details for security matching
+  // Archiving
+  archived          Boolean   @default(false)
+  archivedReason    String?
+  archivedAt        DateTime?
+  archivedById      String?
+  archivedBy        User?     @relation("UserArchivedItems", fields: [archivedById], references: [id])
+
+  // Handover confirmation
+  returnedAt        DateTime?
+  returnedToId      String?
+  handoverByAdminId String?
 
   // Reported by relation
   reportedById String
@@ -69,6 +44,9 @@ model Item {
 
   // Associated Claims
   claims Claim[]
+
+  // Verification inquiries tied to this report
+  verificationRequests VerificationRequest[]
 
   // Matches between lost and found items
   lostMatches  Match[] @relation("LostItemMatches")
@@ -81,25 +59,38 @@ model Item {
   @@index([type])
   @@index([status])
   @@index([reportedById])
+  @@index([archived])
 }
 
 // ------------------------------------------------------
 // 2. USER MODEL
 // ------------------------------------------------------
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  password  String?  // Hashed password for credentials authentication
-  studentId String?  @unique
-  role      UserRole @default(STUDENT)
-  phone     String?
-  avatar    String?
+  id          String    @id @default(cuid())
+  name        String
+  email       String    @unique
+  password    String?   // Hashed password for credentials authentication
+  studentId   String?   @unique
+  role        String    @default("STUDENT") // STUDENT, FACULTY, SECURITY, ADMIN
+  phone       String?
+  avatar      String?
+  lastLoginAt DateTime?
 
   // Relations
-  reportedItems Item[]         @relation("UserReportedItems")
-  claims        Claim[]        @relation("UserClaims")
-  notifications Notification[]
+  reportedItems        Item[]                @relation("UserReportedItems")
+  archivedItems        Item[]                @relation("UserArchivedItems")
+  claims               Claim[]               @relation("UserClaims")
+  notifications        Notification[]
+  verificationRequestsReceived VerificationRequest[] @relation("StudentVerificationRequests")
+  verificationRequestsSent     VerificationRequest[] @relation("AdminVerificationRequests")
+  auditLogs            AuditLog[]            @relation("UserAuditLogs")
+
+  // Match & Return Relations
+  connectedMatches     Match[]               @relation("UserConnectedMatches")
+  disconnectedMatches  Match[]               @relation("UserDisconnectedMatches")
+  claimedReturns       Return[]              @relation("UserClaimedReturns")
+  arrangedReturns      Return[]              @relation("UserArrangedReturns")
+  confirmedReturns     Return[]              @relation("UserConfirmedReturns")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -127,9 +118,9 @@ model Claim {
   uniqueMark       String // Question 2: What unique mark does it have?
   lastSeenLocation String // Question 3: Where did you last see it?
 
-  status          ClaimStatus @default(PENDING)
-  rejectionReason String? // Explanation if rejected by security
-  reviewedBy      String? // Officer identifier (e.g. "Officer Vance (#SEC-402)")
+  status          String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  rejectionReason String?   // Explanation if rejected by security
+  reviewedBy      String?   // Officer identifier (e.g. "Officer Vance (#SEC-402)")
   resolvedAt      DateTime?
 
   createdAt DateTime @default(now())
@@ -141,7 +132,80 @@ model Claim {
 }
 
 // ------------------------------------------------------
-// 4. MATCH MODEL
+// 4. VERIFICATION REQUEST & QUESTIONS (Custom Student Inquiries)
+// ------------------------------------------------------
+model VerificationRequest {
+  id String @id @default(cuid())
+
+  // Target item/report
+  itemId String
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  // Target Student Recipient (Strictly scoped)
+  recipientId String
+  recipient   User   @relation("StudentVerificationRequests", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  // Admin who dispatched the questions
+  createdById String
+  createdBy   User   @relation("AdminVerificationRequests", fields: [createdById], references: [id], onDelete: Cascade)
+
+  // Status: PENDING, ANSWERED, CLARIFICATION_REQUESTED, ACCEPTED, REJECTED
+  status     String  @default("PENDING")
+  adminNotes String?
+
+  // Associated ordered questions
+  questions VerificationQuestion[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([itemId])
+  @@index([recipientId])
+  @@index([createdById])
+  @@index([status])
+}
+
+model VerificationQuestion {
+  id String @id @default(cuid())
+
+  verificationRequestId String
+  verificationRequest   VerificationRequest @relation(fields: [verificationRequestId], references: [id], onDelete: Cascade)
+
+  questionText String
+  answerText   String?
+  answeredAt   DateTime?
+  order        Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([verificationRequestId])
+  @@index([order])
+}
+
+// ------------------------------------------------------
+// 5. AUDIT LOG MODEL (Immutable Security & Administrative Trail)
+// ------------------------------------------------------
+model AuditLog {
+  id String @id @default(cuid())
+
+  actorId    String
+  actor      User     @relation("UserAuditLogs", fields: [actorId], references: [id], onDelete: Cascade)
+  action     String   // REPORT_ARCHIVED, REPORT_RESTORED, CLAIM_APPROVED, CLAIM_REJECTED, VERIFICATION_SENT, VERIFICATION_REVIEWED, HANDOVER_CONFIRMED, ADMIN_SETTINGS_CHANGED, STATUS_CHANGED
+  targetType String   // ITEM, CLAIM, VERIFICATION_REQUEST, USER
+  targetId   String?
+  metadata   String?  // Safe structured context string (never credentials or raw private answers)
+
+  createdAt DateTime @default(now())
+
+  @@index([actorId])
+  @@index([action])
+  @@index([targetType])
+  @@index([createdAt])
+}
+
+// ------------------------------------------------------
+// 6. MATCH MODEL
 // ------------------------------------------------------
 model Match {
   id String @id @default(cuid())
@@ -152,18 +216,72 @@ model Match {
   foundItemId String
   foundItem   Item   @relation("FoundItemMatches", fields: [foundItemId], references: [id], onDelete: Cascade)
 
-  similarityScore Float       @default(0.0) // Match confidence score (e.g. 0.94 = 94%)
-  status          MatchStatus @default(SUGGESTED)
+  similarityScore Float  @default(0.0) // Match confidence score (e.g. 0.94 = 94%)
+  status          String @default("SUGGESTED") // SUGGESTED, CONFIRMED, DISMISSED, DISCONNECTED
+
+  // Connection metadata
+  connectionType String    @default("SUGGESTED") // MANUAL, SUGGESTED
+  connectedById  String?
+  connectedBy    User?     @relation("UserConnectedMatches", fields: [connectedById], references: [id])
+  connectedAt    DateTime?
+  note           String?   // Optional admin note/reason
+
+  // Disconnection metadata
+  disconnectedById String?
+  disconnectedBy   User?     @relation("UserDisconnectedMatches", fields: [disconnectedById], references: [id])
+  disconnectedAt   DateTime?
+  disconnectReason String?
+
+  // 1-to-1 Return lifecycle
+  return Return?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([lostItemId, foundItemId])
   @@index([status])
+  @@index([connectionType])
+  @@index([connectedById])
 }
 
 // ------------------------------------------------------
-// 5. NOTIFICATION MODEL
+// 7. RETURN MODEL (Physical Custody Transfer & Handover)
+// ------------------------------------------------------
+model Return {
+  id String @id @default(cuid())
+
+  // One Return per Match (1-to-1)
+  matchId String @unique
+  match   Match  @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  // Claimant student recipient
+  claimantId String
+  claimant   User   @relation("UserClaimedReturns", fields: [claimantId], references: [id], onDelete: Cascade)
+
+  status String @default("NOT_STARTED") // NOT_STARTED, ARRANGED, CONFIRMED, CANCELLED, DISPUTED
+
+  // Arrangement details
+  arrangedAt DateTime?
+  arrangedById String?
+  arrangedBy   User?   @relation("UserArrangedReturns", fields: [arrangedById], references: [id])
+
+  // Confirmation / Handover completion
+  confirmedAt DateTime?
+  confirmedById String?
+  confirmedBy   User?   @relation("UserConfirmedReturns", fields: [confirmedById], references: [id])
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([matchId])
+  @@index([claimantId])
+  @@index([status])
+}
+
+// ------------------------------------------------------
+// 8. NOTIFICATION MODEL
 // ------------------------------------------------------
 model Notification {
   id String @id @default(cuid())
@@ -173,7 +291,7 @@ model Notification {
 
   title   String
   message String
-  type    String // "MATCH_FOUND", "CLAIM_APPROVED", "CLAIM_REJECTED", "ITEM_LOGGED"
+  type    String // "VERIFICATION_QUESTION_RECEIVED", "ANSWERS_SUBMITTED", "CLAIM_APPROVED", "CLAIM_REJECTED", "ITEM_READY_FOR_PICKUP", "ITEM_HANDOVER_COMPLETED", "MATCH_FOUND"
   isRead  Boolean @default(false)
   link    String? // Optional route to navigate to (e.g. "/dashboard", "/items/CF-101")
 
@@ -181,3 +299,4 @@ model Notification {
 
   @@index([userId, isRead])
 }
+

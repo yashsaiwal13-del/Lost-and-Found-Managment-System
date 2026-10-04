@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { signOut } from 'next-auth/react';
 import { 
   Compass, 
   LayoutDashboard, 
@@ -13,19 +12,25 @@ import {
   HelpCircle, 
   ArrowLeft,
   X,
-  LogOut
+  LogOut,
+  Users,
+  Building2,
+  FileCheck,
+  Search,
+  PackageCheck
 } from 'lucide-react';
-import { STUDENT_PROFILE, STUDENT_STATS } from '@/data/mockData';
-import { getCurrentUser } from '@/app/actions/auth';
+import { STUDENT_PROFILE, OFFICER_PROFILE } from '@/lib/constants';
+import { getCurrentUser, logoutUser } from '@/app/actions/auth';
 
 interface SidebarProps {
-  currentTab: string;
-  onTabChange: (tab: string) => void;
+  currentTab?: string;
+  onTabChange?: (tab: string) => void;
   isOpen: boolean;
   onClose: () => void;
+  userRole?: 'STUDENT' | 'SECURITY' | 'ADMIN';
 }
 
-export default function Sidebar({ currentTab, onTabChange, isOpen, onClose }: SidebarProps) {
+export default function Sidebar({ currentTab = 'overview', onTabChange, isOpen, onClose, userRole }: SidebarProps) {
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
@@ -34,17 +39,59 @@ export default function Sidebar({ currentTab, onTabChange, isOpen, onClose }: Si
     });
   }, []);
 
-  const displayName = currentUser?.name || STUDENT_PROFILE.name;
-  const displayId = currentUser?.studentId || STUDENT_PROFILE.studentId;
+  const role = userRole || currentUser?.role || 'STUDENT';
+  const displayName = currentUser?.name || (role === 'SECURITY' ? OFFICER_PROFILE.name : STUDENT_PROFILE.name);
+  const displayId = currentUser?.studentId || (role === 'SECURITY' ? OFFICER_PROFILE.badgeNumber : STUDENT_PROFILE.studentId);
 
-  const navItems = [
-    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-    { id: 'lost', label: 'My Lost Reports', icon: AlertCircle, badge: `${STUDENT_STATS.lostCount}` },
-    { id: 'found', label: 'My Found Reports', icon: PlusCircle, badge: `${STUDENT_STATS.foundCount}` },
-    { id: 'matches', label: 'Possible Matches', icon: Sparkles, badge: `${STUDENT_STATS.possibleMatches}`, highlightBadge: true },
-    { id: 'claims', label: 'Pending Claims', icon: ShieldCheck, badge: `${STUDENT_STATS.pendingClaims}` },
-    { id: 'help', label: 'Campus Help & Desks', icon: HelpCircle },
-  ];
+  interface NavItem {
+    id: string;
+    label: string;
+    icon: any;
+    href?: string;
+    badge?: string;
+    highlightBadge?: boolean;
+  }
+
+  const getNavItems = (): NavItem[] => {
+    if (role === 'ADMIN') {
+      return [
+        { id: 'admin-overview', label: 'Admin Operations', icon: LayoutDashboard, href: '/admin' },
+        { id: 'admin-items', label: 'All Campus Items', icon: Search, href: '/admin#items' },
+        { id: 'admin-claims', label: 'Claims Verification', icon: ShieldCheck, href: '/security' },
+        { id: 'admin-users', label: 'User Directory', icon: Users, href: '/admin#users' },
+        { id: 'admin-browse', label: 'Public Registry', icon: Compass, href: '/browse' },
+      ];
+    }
+
+    if (role === 'SECURITY') {
+      return [
+        { id: 'sec-overview', label: 'Campus Safety Desk', icon: ShieldCheck, href: '/security' },
+        { id: 'sec-claims', label: 'Claims Review Queue', icon: FileCheck, href: '/security#claims' },
+        { id: 'sec-custody', label: 'Custody Locker', icon: Building2, href: '/security#locker' },
+        { id: 'sec-log-found', label: 'Log Found Item', icon: PlusCircle, href: '/report-found' },
+        { id: 'sec-browse', label: 'Public Registry', icon: Compass, href: '/browse' },
+      ];
+    }
+
+    // Default STUDENT role
+    return [
+      { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+      { id: 'verification', label: 'Verification Questions', icon: HelpCircle, href: '/dashboard/verification' },
+      { id: 'collected', label: 'Collected Items', icon: PackageCheck, href: '/dashboard/collected' },
+      { id: 'lost', label: 'My Lost Reports', icon: AlertCircle },
+      { id: 'found', label: 'My Found Reports', icon: PlusCircle },
+      { id: 'matches', label: 'Possible Matches', icon: Sparkles },
+      { id: 'claims', label: 'Pending Claims', icon: ShieldCheck },
+    ];
+  };
+
+  const navItems = getNavItems();
+
+  const getPortalTitle = () => {
+    if (role === 'ADMIN') return 'Admin Portal';
+    if (role === 'SECURITY') return 'Campus Safety';
+    return 'Student Portal';
+  };
 
   return (
     <>
@@ -74,7 +121,7 @@ export default function Sidebar({ currentTab, onTabChange, isOpen, onClose }: Si
                   Campus<span className="text-indigo-400">Find</span>
                 </span>
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-indigo-400 block -mt-1">
-                  Student Portal
+                  {getPortalTitle()}
                 </span>
               </div>
             </Link>
@@ -97,11 +144,31 @@ export default function Sidebar({ currentTab, onTabChange, isOpen, onClose }: Si
                 const Icon = item.icon;
                 const isActive = currentTab === item.id;
 
+                if (item.href) {
+                  return (
+                    <Link
+                      key={item.id}
+                      href={item.href}
+                      onClick={onClose}
+                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                        isActive
+                          ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                          : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon className={`h-4 w-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                        <span>{item.label}</span>
+                      </div>
+                    </Link>
+                  );
+                }
+
                 return (
                   <button
                     key={item.id}
                     onClick={() => {
-                      onTabChange(item.id);
+                      if (onTabChange) onTabChange(item.id);
                       onClose();
                     }}
                     className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
@@ -135,7 +202,7 @@ export default function Sidebar({ currentTab, onTabChange, isOpen, onClose }: Si
           </div>
         </div>
 
-        {/* Bottom Section: Student Profile & Homepage Backlink */}
+        {/* Bottom Section: Profile & Homepage Backlink */}
         <div className="p-4 border-t border-slate-800 space-y-3">
           
           {/* Back to Homepage Link */}
@@ -147,25 +214,33 @@ export default function Sidebar({ currentTab, onTabChange, isOpen, onClose }: Si
             <span>Return to Public Homepage</span>
           </Link>
 
-          {/* Student Profile Card */}
+          {/* User Profile Card */}
           <div className="bg-slate-800/70 border border-slate-700/60 rounded-xl p-3 flex items-center justify-between">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-xs shrink-0">
+              <div className={`h-8 w-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 ${
+                role === 'ADMIN' ? 'bg-purple-600' : role === 'SECURITY' ? 'bg-blue-600' : 'bg-gradient-to-tr from-indigo-500 to-purple-500'
+              }`}>
                 {displayName.charAt(0)}
               </div>
               <div className="min-w-0">
                 <div className="text-xs font-semibold text-white truncate">
                   {displayName}
                 </div>
-                <div className="text-[10px] text-slate-400 font-mono truncate">
-                  {displayId}
+                <div className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider truncate">
+                  {role} • <span className="text-slate-400 font-mono font-normal">{displayId}</span>
                 </div>
               </div>
             </div>
 
             <button
               title="Sign Out"
-              onClick={() => signOut({ callbackUrl: '/login' })}
+              onClick={async () => {
+                try {
+                  await logoutUser();
+                } catch {
+                  window.location.href = '/login';
+                }
+              }}
               className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-700/50 rounded-lg transition-colors cursor-pointer"
             >
               <LogOut className="h-4 w-4" />

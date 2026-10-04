@@ -8,7 +8,7 @@ import {
   UserCheck, 
   Sparkles 
 } from 'lucide-react';
-import { HOW_IT_WORKS_STEPS } from '@/data/mockData';
+import { HOW_IT_WORKS_STEPS } from '@/lib/constants';
 
 export default function HowItWorks() {
   const stepIcons = [

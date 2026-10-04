@@ -22,7 +22,8 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import { CATEGORIES, CAMPUS_LOCATIONS } from '@/data/mockData';
+import { CATEGORIES } from '@/lib/constants';
+import { CAMPUS_LOCATIONS } from '@/lib/campusLocations';
 import { submitFoundItemReport } from '@/app/actions/reportFound';
 
 interface FormState {
@@ -48,11 +49,12 @@ interface FormErrors {
 }
 
 const STORAGE_OPTIONS = [
-  'Turned in to Main Campus Security Desk (Bldg 4, Room 102)',
-  'Turned in to Central Library Front Circulation Desk',
-  'Turned in to Student Union Information Counter',
-  'Turned in to Science Complex Department Office',
-  'Turned in to Campus Recreation Gym Front Desk',
+  'Turned in to Main Campus Security Desk',
+  'Turned in to 6th Building Security / Reception Desk',
+  'Turned in to PCP Department Office',
+  'Turned in to SBPIM(MBA) Office',
+  'Turned in to Architecture Building (5th Floor) Desk',
+  'Turned in to Hostel Security Office',
   'With Finder (Holding temporarily until verified owner claims)',
   'Other Campus Location (Specify Below)',
 ];
@@ -79,17 +81,29 @@ export default function ReportFoundPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Handle Image Selection & Preview
+  // Handle Image Selection & Preview with strict file type and size validation
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Image file size must be less than 5MB.');
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+      if (!allowedTypes.includes(file.type)) {
+        alert('Invalid file format. Only JPG, PNG, WebP, and GIF images are permitted.');
+        if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
+
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image file size exceeds 5MB limit. Please upload a smaller file.');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+
       setImageFile(file);
-      const previewUrl = URL.createObjectURL(file);
-      setImagePreview(previewUrl);
+      const reader = new FileReader();
+      reader.onload = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -521,7 +535,7 @@ export default function ReportFoundPage() {
 
                     <input
                       type="text"
-                      placeholder="Specific room, floor, or spot (e.g. Table 4 near Cafeteria windows)"
+                      placeholder="Specific room, floor, or spot (e.g. Room 204, 6th Building)"
                       value={formData.specificLocation}
                       onChange={(e) => setFormData({ ...formData, specificLocation: e.target.value })}
                       className="mt-2 w-full text-xs px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50/30 focus:bg-white focus:outline-none focus:border-indigo-500"
@@ -686,19 +700,19 @@ export default function ReportFoundPage() {
                 <ul className="space-y-2.5 text-xs text-slate-600">
                   <li className="flex items-start gap-2">
                     <span className="h-2 w-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
-                    <span><strong>Main Security Office:</strong> Admin Bldg 4, Room 102 (24/7)</span>
+                    <span><strong>Campus Safety Desk:</strong> Main Security Office (24/7)</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="h-2 w-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
-                    <span><strong>Library Desk:</strong> 1st Floor Main Entrance</span>
+                    <span><strong>6th Building Desk:</strong> Ground Floor Reception (8 AM – 6 PM)</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="h-2 w-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
-                    <span><strong>Student Union:</strong> Info Counter (9 AM – 7 PM)</span>
+                    <span><strong>PCP / SBPIM Office:</strong> Department Office (9 AM – 5 PM)</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="h-2 w-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
-                    <span><strong>Campus Gym:</strong> Front Equipment Check-in</span>
+                    <span><strong>Hostel Office:</strong> Girls & Boys Hostel Security Desks</span>
                   </li>
                 </ul>
               </div>

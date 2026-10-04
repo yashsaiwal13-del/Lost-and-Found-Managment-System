@@ -1,24 +1,112 @@
 'use server';
 
+import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/app/actions/auth';
-import { getUserReports } from '@/lib/dataStore';
-import { StudentReport } from '@/types';
+import { StudentReport, ItemStatus } from '@/types';
+import { MatchStatus } from '@/lib/enums';
 
 /**
- * Fetches the currently authenticated student's own reports from the database.
+ * Fetches the currently authenticated student's own reports from the database,
+ * along with connected matches, return arrangements, and verification status.
  */
 export async function getStudentReports(): Promise<StudentReport[]> {
   try {
     const user = await getCurrentUser();
+    if (!user?.id) {
+      return [];
+    }
 
-    const items = await getUserReports({
-      userId: user?.id,
-      email: user?.email || 'maya.lin@campus.edu',
+    const items = await prisma.item.findMany({
+      where: {
+        reportedById: user.id,
+        archived: false,
+      },
+      include: {
+        lostMatches: {
+          where: {
+            status: { in: [MatchStatus.CONFIRMED, MatchStatus.SUGGESTED] },
+          },
+          include: {
+            foundItem: {
+              select: {
+                id: true,
+                name: true,
+                category: true,
+                location: true,
+                storageLocation: true,
+                image: true,
+              },
+            },
+            return: true,
+          },
+          orderBy: {
+            connectedAt: 'desc',
+          },
+        },
+        foundMatches: {
+          where: {
+            status: MatchStatus.CONFIRMED,
+          },
+          include: {
+            lostItem: {
+              select: {
+                id: true,
+                name: true,
+                category: true,
+                location: true,
+              },
+            },
+            return: true,
+          },
+        },
+        verificationRequests: {
+          where: {
+            status: { in: ['PENDING', 'CLARIFICATION_REQUESTED'] },
+          },
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
     });
 
     return items.map((item) => {
-      let statusFormat = item.status.toLowerCase();
-      if (statusFormat === 'pending_claim') statusFormat = 'pending_verification';
+      // Find confirmed match if exists
+      const confirmedMatch = item.lostMatches.find((m) => m.status === MatchStatus.CONFIRMED);
+      const suggestedMatchesCount = item.lostMatches.length;
+
+      // Status mapping
+      let statusFormat: ItemStatus = 'open';
+      if (item.status === 'RESOLVED') {
+        statusFormat = 'resolved';
+      } else if (item.status === 'PENDING_CLAIM' || item.status === 'PENDING_REVIEW' || item.verificationRequests.length > 0) {
+        statusFormat = 'pending_verification';
+      } else if (item.status === 'REPORTED' || item.status === 'OPEN') {
+        statusFormat = 'open';
+      }
+
+      let connectedMatchData = null;
+      if (confirmedMatch && confirmedMatch.foundItem) {
+        connectedMatchData = {
+          matchId: confirmedMatch.id,
+          foundItemId: confirmedMatch.foundItem.id,
+          foundItemTitle: confirmedMatch.foundItem.name,
+          foundItemCategory: confirmedMatch.foundItem.category,
+          foundItemLocation: confirmedMatch.foundItem.location,
+          similarityScore: confirmedMatch.similarityScore,
+          connectionType: confirmedMatch.connectionType,
+          collectionPoint: confirmedMatch.foundItem.storageLocation,
+          returnStatus: confirmedMatch.return?.status || 'NOT_STARTED',
+          arrangedAt: confirmedMatch.return?.arrangedAt ? confirmedMatch.return.arrangedAt.toISOString() : null,
+          confirmedAt: confirmedMatch.return?.confirmedAt ? confirmedMatch.return.confirmedAt.toISOString() : null,
+          instructions: confirmedMatch.return?.notes || null,
+          adminNote: confirmedMatch.note || null,
+        };
+      }
 
       return {
         id: item.id,
@@ -32,12 +120,20 @@ export async function getStudentReports(): Promise<StudentReport[]> {
           day: 'numeric',
           year: 'numeric',
         }),
-        status: statusFormat as any,
-        matchesCount: item.type === 'LOST' ? 1 : 0,
+        rawDate: item.date.toISOString(),
+        time: item.time,
+        image: item.image,
+        storageLocation: item.storageLocation,
+        status: statusFormat,
+        matchesCount: confirmedMatch ? 1 : suggestedMatchesCount > 0 ? suggestedMatchesCount : 0,
+        matchedItemId: confirmedMatch?.foundItemId || item.lostMatches[0]?.foundItemId || undefined,
+        connectedMatch: connectedMatchData,
+        hasPendingVerification: item.verificationRequests.length > 0,
       };
     });
   } catch (err) {
-    console.warn('Error fetching student reports:', err);
+    console.error('Error fetching student reports:', err);
     return [];
   }
 }
+

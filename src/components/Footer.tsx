@@ -33,18 +33,18 @@ export default function Footer() {
             </h4>
             <ul className="space-y-2.5">
               <li>
-                <a href="#browse" className="hover:text-indigo-400 transition-colors">
-                  Browse Found Registry
-                </a>
-              </li>
-              <li>
-                <a href="#report-lost" className="hover:text-indigo-400 transition-colors">
+                <a href="/report-lost" className="hover:text-indigo-400 transition-colors">
                   Report a Lost Item
                 </a>
               </li>
               <li>
-                <a href="#report-found" className="hover:text-indigo-400 transition-colors">
+                <a href="/report-found" className="hover:text-indigo-400 transition-colors">
                   Register a Found Item
+                </a>
+              </li>
+              <li>
+                <a href="/dashboard" className="hover:text-indigo-400 transition-colors">
+                  Student Dashboard
                 </a>
               </li>
               <li>

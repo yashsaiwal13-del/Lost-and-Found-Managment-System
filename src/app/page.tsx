@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import Navbar from '@/components/Navbar';
 import Hero from '@/components/Hero';
-import BrowseItems from '@/components/BrowseItems';
 import ReportSection from '@/components/ReportSection';
 import HowItWorks from '@/components/HowItWorks';
 import Features from '@/components/Features';
@@ -19,16 +18,10 @@ export default function HomePage() {
       <Navbar />
 
       <main className="flex-1">
-        {/* 2. Hero Section (including 3. Report Lost Item, 4. Report Found Item, 5. Browse Found Items buttons) */}
+        {/* 2. Hero Section */}
         <Hero 
           onSearchChange={(q) => setSearchQuery(q)}
           onLocationChange={(loc) => setSelectedLocation(loc)}
-        />
-
-        {/* Live Registry (Interactive Mock Showcase) */}
-        <BrowseItems 
-          initialSearchQuery={searchQuery}
-          initialLocation={selectedLocation}
         />
 
         {/* Reporting Section (Interactive Forms for Lost & Found items) */}

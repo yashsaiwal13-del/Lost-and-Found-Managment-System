@@ -1,9 +1,11 @@
 'use server';
 
 import prisma from '@/lib/prisma';
-import { ItemType, ItemStatus, UserRole } from '@prisma/client';
+import { ItemType, ItemStatus, UserRole } from '@/lib/enums';
 import { saveItem } from '@/lib/dataStore';
-import { getCurrentUser } from '@/app/actions/auth';
+import { requireRole } from '@/lib/authz';
+import { reportLostSchema, formatZodError } from '@/lib/validations';
+import { notifyReporterOfSubmission } from '@/lib/notifications';
 
 export interface ReportLostInput {
   itemName: string;
@@ -34,54 +36,57 @@ export interface ReportLostResult {
 
 /**
  * Server Action: Connects the Report Lost Item form to PostgreSQL using Prisma.
- * Steps:
- * 1. Validate the data.
- * 2. Save the item in PostgreSQL.
- * 3. Set type to LOST.
- * 4. Set status to REPORTED.
- * 5. Return success result with created item record.
+ * Strictly validates via Zod and sends in-app confirmation notification.
  */
 export async function submitLostItemReport(input: ReportLostInput): Promise<ReportLostResult> {
-  // ----------------------------------------------------
-  // 1. VALIDATE THE DATA (Server-side validation)
-  // ----------------------------------------------------
-  if (!input.itemName || !input.itemName.trim()) {
-    return { success: false, error: 'Item name is required.' };
-  }
-  if (!input.category || !input.category.trim()) {
-    return { success: false, error: 'Please select an item category.' };
-  }
-  if (!input.description || input.description.trim().length < 10) {
-    return { success: false, error: 'Description must be at least 10 characters long.' };
-  }
-  if (!input.location || !input.location.trim()) {
-    return { success: false, error: 'Location lost is required.' };
-  }
-  if (!input.dateLost) {
-    return { success: false, error: 'Date lost is required.' };
+  const parsed = reportLostSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: formatZodError(parsed.error),
+    };
   }
 
-  const effectiveLocation = input.specificLocation?.trim()
-    ? `${input.location.trim()} (${input.specificLocation.trim()})`
-    : input.location.trim();
+  const validData = parsed.data;
+
+  const effectiveLocation = validData.specificLocation?.trim()
+    ? `${validData.location.trim()} (${validData.specificLocation.trim()})`
+    : validData.location.trim();
+
+  let currentUser;
+  try {
+    currentUser = await requireRole();
+  } catch (err: any) {
+    return {
+      success: false,
+      error: 'You must be signed in to submit a lost item report.',
+    };
+  }
 
   try {
-    const currentUser = await getCurrentUser();
-
     const { item, isPostgres } = await saveItem({
-      name: input.itemName.trim(),
-      description: input.description.trim(),
-      category: input.category.trim(),
+      name: validData.itemName.trim(),
+      description: validData.description.trim(),
+      category: validData.category.trim(),
       type: 'LOST',
       location: effectiveLocation,
-      date: input.dateLost,
-      time: input.timeLost?.trim() || null,
-      image: input.image || null,
-      additionalDetails: input.additionalDetails?.trim() || null,
-      reportedById: currentUser?.id,
-      reportedByName: currentUser?.name || 'Maya Lin',
-      reportedByEmail: currentUser?.email || 'maya.lin@campus.edu',
+      date: validData.dateLost,
+      time: validData.timeLost?.trim() || null,
+      image: validData.image || null,
+      additionalDetails: validData.additionalDetails?.trim() || null,
+      reportedById: currentUser.id,
     });
+
+    // Send confirmation in-app notification to reporter
+    await notifyReporterOfSubmission(currentUser.id, item.id, item.name, 'LOST');
+
+    // Run automated match suggestion engine against opposite-type reports
+    try {
+      const { generateSuggestions } = await import('@/lib/matching');
+      await generateSuggestions(item.id);
+    } catch (matchErr) {
+      console.warn('[reportLost] Non-fatal suggestion generation warning:', matchErr);
+    }
 
     return {
       success: true,
@@ -104,3 +109,4 @@ export async function submitLostItemReport(input: ReportLostInput): Promise<Repo
     };
   }
 }
+

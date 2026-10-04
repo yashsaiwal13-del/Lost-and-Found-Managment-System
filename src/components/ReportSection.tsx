@@ -12,7 +12,10 @@ import {
   ShieldAlert,
   Info
 } from 'lucide-react';
-import { CATEGORIES, CAMPUS_LOCATIONS } from '@/data/mockData';
+import { CATEGORIES } from '@/lib/constants';
+import { CAMPUS_LOCATIONS } from '@/lib/campusLocations';
+import { submitLostItemReport } from '@/app/actions/reportLost';
+import { submitFoundItemReport } from '@/app/actions/reportFound';
 
 export default function ReportSection() {
   const [activeTab, setActiveTab] = useState<'lost' | 'found'>('lost');
@@ -36,40 +39,33 @@ export default function ReportSection() {
     setLoading(true);
 
     try {
-      const endpoint = activeTab === 'lost' ? '/api/reports/lost' : '/api/reports/found';
-      const payload = activeTab === 'lost' ? {
-        itemName: formData.title,
-        category: formData.category,
-        location: formData.location,
-        dateLost: formData.date || new Date().toISOString(),
-        description: formData.description,
-        contactName: formData.contactName,
-        contactEmail: formData.contactEmail,
-      } : {
-        itemName: formData.title,
-        category: formData.category,
-        location: formData.location,
-        dateFound: formData.date || new Date().toISOString(),
-        description: formData.description,
-        storageLocation: 'Campus Security Central Desk',
-        contactName: formData.contactName,
-        contactEmail: formData.contactEmail,
-      };
+      let result;
+      if (activeTab === 'lost') {
+        result = await submitLostItemReport({
+          itemName: formData.title,
+          category: formData.category,
+          location: formData.location,
+          dateLost: formData.date || new Date().toISOString(),
+          description: formData.description,
+        });
+      } else {
+        result = await submitFoundItemReport({
+          itemName: formData.title,
+          category: formData.category,
+          location: formData.location,
+          dateFound: formData.date || new Date().toISOString(),
+          description: formData.description,
+          storageLocation: 'Campus Security Central Desk',
+        });
+      }
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setError(data.error || 'Failed to save report. Please verify input fields.');
+      if (!result.success) {
+        setError(result.error || 'Failed to save report. Please verify input fields.');
         setLoading(false);
         return;
       }
 
-      setTrackingId(data.item?.id || (activeTab === 'lost' ? 'LOST-8924' : 'FND-4310'));
+      setTrackingId(result.item?.id || (activeTab === 'lost' ? 'LOST-8924' : 'FND-4310'));
       setSubmitted(true);
       setLoading(false);
 

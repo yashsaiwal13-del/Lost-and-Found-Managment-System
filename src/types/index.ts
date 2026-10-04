@@ -1,6 +1,6 @@
 export type ItemType = 'lost' | 'found';
 
-export type ItemStatus = 'open' | 'claimed' | 'pending_verification' | 'resolved';
+export type ItemStatus = 'open' | 'claimed' | 'pending_verification' | 'verified' | 'resolved';
 
 export type Category = 
   | 'Electronics'
@@ -25,6 +25,8 @@ export interface CampusItem {
   status: ItemStatus;
   imageUrl?: string;
   storageLocation?: string; // Where security holds it, e.g. "Security Desk - Locker #14"
+  isArchived?: boolean;
+  archivedReason?: string;
   reportedBy: {
     role: 'student' | 'staff' | 'security';
     name: string;
@@ -48,10 +50,30 @@ export interface StudentReport {
   category: Category;
   location: string;
   dateReported: string;
+  rawDate?: string;
+  time?: string | null;
+  image?: string | null;
+  storageLocation?: string | null;
   status: ItemStatus;
   matchesCount: number;
   matchedItemId?: string;
   claimId?: string;
+  connectedMatch?: {
+    matchId: string;
+    foundItemId: string;
+    foundItemTitle: string;
+    foundItemCategory: string;
+    foundItemLocation: string;
+    similarityScore: number;
+    connectionType: string;
+    collectionPoint?: string | null;
+    returnStatus?: string | null;
+    arrangedAt?: string | null;
+    confirmedAt?: string | null;
+    instructions?: string | null;
+    adminNote?: string | null;
+  } | null;
+  hasPendingVerification?: boolean;
 }
 
 export interface PossibleMatch {

@@ -9,7 +9,7 @@ import {
   FileCheck,
   CheckCircle2
 } from 'lucide-react';
-import { CAMPUS_FEATURES } from '@/data/mockData';
+import { CAMPUS_FEATURES } from '@/lib/constants';
 
 export default function Features() {
   const getIcon = (name: string) => {

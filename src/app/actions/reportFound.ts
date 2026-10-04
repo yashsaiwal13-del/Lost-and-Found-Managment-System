@@ -1,9 +1,11 @@
 'use server';
 
 import prisma from '@/lib/prisma';
-import { ItemType, ItemStatus, UserRole } from '@prisma/client';
+import { ItemType, ItemStatus, UserRole } from '@/lib/enums';
 import { saveItem } from '@/lib/dataStore';
-import { getCurrentUser } from '@/app/actions/auth';
+import { requireRole } from '@/lib/authz';
+import { reportFoundSchema, formatZodError } from '@/lib/validations';
+import { notifyReporterOfSubmission } from '@/lib/notifications';
 
 export interface ReportFoundInput {
   itemName: string;
@@ -36,54 +38,61 @@ export interface ReportFoundResult {
 
 /**
  * Server Action: Connects the Report Found Item form to PostgreSQL using Prisma,
- * with resilient permanent local storage fallback.
+ * with Zod input validation and in-app confirmation notification.
  */
 export async function submitFoundItemReport(input: ReportFoundInput): Promise<ReportFoundResult> {
-  // 1. VALIDATE THE DATA
-  if (!input.itemName || !input.itemName.trim()) {
-    return { success: false, error: 'Item name is required.' };
-  }
-  if (!input.category || !input.category.trim()) {
-    return { success: false, error: 'Please select an item category.' };
-  }
-  if (!input.description || input.description.trim().length < 10) {
-    return { success: false, error: 'Description must be at least 10 characters long.' };
-  }
-  if (!input.location || !input.location.trim()) {
-    return { success: false, error: 'Location found is required.' };
-  }
-  if (!input.dateFound) {
-    return { success: false, error: 'Date found is required.' };
-  }
-  if (!input.storageLocation || !input.storageLocation.trim()) {
-    return { success: false, error: 'Current storage location is required.' };
+  const parsed = reportFoundSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: formatZodError(parsed.error),
+    };
   }
 
-  const effectiveLocation = input.specificLocation?.trim()
-    ? `${input.location.trim()} (${input.specificLocation.trim()})`
-    : input.location.trim();
+  const validData = parsed.data;
 
-  const effectiveStorage = input.storageLocation === 'Other Campus Location (Specify Below)'
+  const effectiveLocation = validData.specificLocation?.trim()
+    ? `${validData.location.trim()} (${validData.specificLocation.trim()})`
+    : validData.location.trim();
+
+  const effectiveStorage = validData.storageLocation === 'Other Campus Location (Specify Below)'
     ? (input.customStorage?.trim() || 'Specified by finder')
-    : input.storageLocation.trim();
+    : (validData.storageLocation?.trim() || 'Security Locker');
+
+  let currentUser;
+  try {
+    currentUser = await requireRole();
+  } catch (err: any) {
+    return {
+      success: false,
+      error: 'You must be signed in to submit a found item report.',
+    };
+  }
 
   try {
-    const currentUser = await getCurrentUser();
-
     const { item, isPostgres } = await saveItem({
-      name: input.itemName.trim(),
-      description: input.description.trim(),
-      category: input.category.trim(),
+      name: validData.itemName.trim(),
+      description: validData.description.trim(),
+      category: validData.category.trim(),
       type: 'FOUND',
       location: effectiveLocation,
-      date: input.dateFound,
-      time: input.timeFound?.trim() || null,
+      date: validData.dateFound,
+      time: validData.timeFound?.trim() || null,
       storageLocation: effectiveStorage,
-      image: input.image || null,
-      reportedById: currentUser?.id,
-      reportedByName: currentUser?.name || 'Student Reporter',
-      reportedByEmail: currentUser?.email || 'student@campus.edu',
+      image: validData.image || null,
+      reportedById: currentUser.id,
     });
+
+    // Send confirmation notification to reporter
+    await notifyReporterOfSubmission(currentUser.id, item.id, item.name, 'FOUND');
+
+    // Run automated match suggestion engine against opposite-type reports
+    try {
+      const { generateSuggestions } = await import('@/lib/matching');
+      await generateSuggestions(item.id);
+    } catch (matchErr) {
+      console.warn('[reportFound] Non-fatal suggestion generation warning:', matchErr);
+    }
 
     return {
       success: true,
@@ -107,3 +116,4 @@ export async function submitFoundItemReport(input: ReportFoundInput): Promise<Re
     };
   }
 }
+

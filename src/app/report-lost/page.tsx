@@ -21,7 +21,8 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import { CATEGORIES, CAMPUS_LOCATIONS } from '@/data/mockData';
+import { CATEGORIES } from '@/lib/constants';
+import { CAMPUS_LOCATIONS } from '@/lib/campusLocations';
 import { submitLostItemReport } from '@/app/actions/reportLost';
 
 interface FormState {
@@ -65,18 +66,29 @@ export default function ReportLostPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Handle Image Selection & Preview
+  // Handle Image Selection & Preview with strict file type and size validation
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Basic size validation (< 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Image file size must be less than 5MB.');
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+      if (!allowedTypes.includes(file.type)) {
+        alert('Invalid file format. Only JPG, PNG, WebP, and GIF images are permitted.');
+        if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
+
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image file size exceeds 5MB limit. Please upload a smaller file.');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+
       setImageFile(file);
-      const previewUrl = URL.createObjectURL(file);
-      setImagePreview(previewUrl);
+      const reader = new FileReader();
+      reader.onload = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -493,7 +505,7 @@ export default function ReportLostPage() {
                     {/* Specific room or area within building */}
                     <input
                       type="text"
-                      placeholder="Specific room, floor, or desk (e.g. 3rd Floor quiet cubicle #14)"
+                      placeholder="Specific room, floor, or desk (e.g. Room 204, 6th Building)"
                       value={formData.specificLocation}
                       onChange={(e) => setFormData({ ...formData, specificLocation: e.target.value })}
                       className="mt-2 w-full text-xs px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50/30 focus:bg-white focus:outline-none focus:border-indigo-500"

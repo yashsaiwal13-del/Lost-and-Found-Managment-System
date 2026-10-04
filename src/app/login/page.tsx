@@ -99,6 +99,14 @@ function LoginForm() {
             </p>
           </div>
 
+          {/* Password Updated Banner */}
+          {searchParams.get('updated') === 'true' && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl text-xs flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+              <span>Password updated successfully. Please log in with your new credentials.</span>
+            </div>
+          )}
+
           {/* Error Banner */}
           {error && (
             <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-2xl text-xs flex items-center gap-2">

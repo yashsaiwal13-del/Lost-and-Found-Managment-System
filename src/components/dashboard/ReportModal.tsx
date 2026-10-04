@@ -11,7 +11,10 @@ import {
   Tag, 
   Info 
 } from 'lucide-react';
-import { CATEGORIES, CAMPUS_LOCATIONS, STUDENT_PROFILE } from '@/data/mockData';
+import { CATEGORIES, STUDENT_PROFILE } from '@/lib/constants';
+import { CAMPUS_LOCATIONS } from '@/lib/campusLocations';
+import { submitLostItemReport } from '@/app/actions/reportLost';
+import { submitFoundItemReport } from '@/app/actions/reportFound';
 
 interface ReportModalProps {
   isOpen: boolean;
@@ -42,31 +45,28 @@ export default function ReportModal({ isOpen, type, onClose, onSuccess }: Report
     setLoading(true);
 
     try {
-      const endpoint = isLost ? '/api/reports/lost' : '/api/reports/found';
-      const payload = isLost ? {
-        itemName: formData.title,
-        category: formData.category,
-        location: formData.location,
-        dateLost: new Date().toISOString(),
-        description: formData.description,
-      } : {
-        itemName: formData.title,
-        category: formData.category,
-        location: formData.location,
-        dateFound: new Date().toISOString(),
-        description: formData.description,
-        storageLocation: 'Campus Safety Central Desk',
-      };
+      let result;
+      if (isLost) {
+        result = await submitLostItemReport({
+          itemName: formData.title,
+          category: formData.category,
+          location: formData.location,
+          dateLost: new Date().toISOString(),
+          description: formData.description,
+        });
+      } else {
+        result = await submitFoundItemReport({
+          itemName: formData.title,
+          category: formData.category,
+          location: formData.location,
+          dateFound: new Date().toISOString(),
+          description: formData.description,
+          storageLocation: 'Campus Safety Central Desk',
+        });
+      }
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setError(data.error || 'Could not save report.');
+      if (!result.success) {
+        setError(result.error || 'Could not save report.');
         setLoading(false);
         return;
       }

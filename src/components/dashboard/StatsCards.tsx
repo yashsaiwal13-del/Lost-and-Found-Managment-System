@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   FileText, 
   Sparkles, 
@@ -8,19 +8,53 @@ import {
   CheckCircle2, 
   ArrowUpRight 
 } from 'lucide-react';
-import { STUDENT_STATS } from '@/data/mockData';
+import { StudentStats } from '@/types';
+import { getStudentReports } from '@/app/actions/getStudentReports';
 
 interface StatsCardsProps {
   onSelectTab?: (tab: string) => void;
+  stats?: StudentStats;
 }
 
-export default function StatsCards({ onSelectTab }: StatsCardsProps) {
+export default function StatsCards({ onSelectTab, stats: initialStats }: StatsCardsProps) {
+  const [stats, setStats] = useState<StudentStats>(initialStats || {
+    totalReports: 0,
+    lostCount: 0,
+    foundCount: 0,
+    possibleMatches: 0,
+    pendingClaims: 0,
+    resolvedItems: 0,
+  });
+
+  useEffect(() => {
+    if (initialStats) return;
+    getStudentReports()
+      .then((reports) => {
+        if (reports) {
+          const lostCount = reports.filter((r) => r.type === 'lost').length;
+          const foundCount = reports.filter((r) => r.type === 'found').length;
+          const possibleMatches = reports.filter((r) => r.matchesCount > 0 || r.connectedMatch != null).length;
+          const pendingClaims = reports.filter((r) => r.status === 'pending_verification' || r.hasPendingVerification).length;
+          const resolvedItems = reports.filter((r) => r.status === 'resolved').length;
+          setStats({
+            totalReports: reports.length,
+            lostCount,
+            foundCount,
+            possibleMatches,
+            pendingClaims,
+            resolvedItems,
+          });
+        }
+      })
+      .catch((err) => console.warn('Could not load student stats:', err));
+  }, [initialStats]);
+
   const cards = [
     {
       id: 'reports',
       title: 'Total Reports',
-      value: STUDENT_STATS.totalReports,
-      subtitle: `${STUDENT_STATS.lostCount} Lost • ${STUDENT_STATS.foundCount} Found`,
+      value: stats.totalReports,
+      subtitle: `${stats.lostCount} Lost • ${stats.foundCount} Found`,
       icon: FileText,
       iconBg: 'bg-indigo-50 text-indigo-600',
       borderAccent: 'border-slate-200/80 hover:border-indigo-300',
@@ -29,18 +63,18 @@ export default function StatsCards({ onSelectTab }: StatsCardsProps) {
     {
       id: 'matches',
       title: 'Possible Matches',
-      value: STUDENT_STATS.possibleMatches,
+      value: stats.possibleMatches,
       subtitle: 'Items matching your reports',
       icon: Sparkles,
       iconBg: 'bg-amber-50 text-amber-600',
       borderAccent: 'border-amber-200/90 bg-amber-50/20 hover:border-amber-300',
       targetTab: 'matches',
-      badge: 'Action Needed',
+      badge: stats.possibleMatches > 0 ? 'Action Needed' : undefined,
     },
     {
       id: 'claims',
       title: 'Pending Claims',
-      value: STUDENT_STATS.pendingClaims,
+      value: stats.pendingClaims,
       subtitle: 'Awaiting security review',
       icon: Clock,
       iconBg: 'bg-purple-50 text-purple-600',
@@ -50,7 +84,7 @@ export default function StatsCards({ onSelectTab }: StatsCardsProps) {
     {
       id: 'resolved',
       title: 'Resolved Items',
-      value: STUDENT_STATS.resolvedItems,
+      value: stats.resolvedItems,
       subtitle: 'Reunited & closed',
       icon: CheckCircle2,
       iconBg: 'bg-emerald-50 text-emerald-600',

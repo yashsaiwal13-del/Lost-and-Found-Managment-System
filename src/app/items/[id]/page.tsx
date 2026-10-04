@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
@@ -24,18 +24,52 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import { MOCK_ITEMS, STUDENT_PROFILE } from '@/data/mockData';
+import { getCurrentUser } from '@/app/actions/auth';
 import { CampusItem } from '@/types';
 import { submitOwnershipClaim } from '@/app/actions/claims';
+import { getCampusItemById } from '@/app/actions/getItems';
 
 export default function ItemDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const itemId = (params?.id as string) || '';
 
-  // Find the item in mock registry
-  const item: CampusItem | undefined = useMemo(() => {
-    return MOCK_ITEMS.find((i) => i.id.toLowerCase() === itemId.toLowerCase());
+  const [item, setItem] = useState<CampusItem | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    getCurrentUser().then((u) => {
+      if (u) {
+        setCurrentUser(u);
+        setClaimData((prev) => ({
+          ...prev,
+          studentName: u.name || '',
+          studentId: u.studentId || '',
+        }));
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!itemId) return;
+    let isMounted = true;
+    getCampusItemById(itemId)
+      .then((data) => {
+        if (isMounted && data) {
+          setItem(data);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load item:', err);
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [itemId]);
 
   // Claim Form State (Visible so student can verify immediately)
@@ -44,14 +78,15 @@ export default function ItemDetailsPage() {
     exactColor: '',
     uniqueMark: '',
     lastSeenLocation: '',
-    studentName: STUDENT_PROFILE.name,
-    studentId: STUDENT_PROFILE.studentId,
+    studentName: '',
+    studentId: '',
   });
 
   const [claimErrors, setClaimErrors] = useState<{
     exactColor?: string;
     uniqueMark?: string;
     lastSeenLocation?: string;
+    server?: string;
   }>({});
 
   const [isSubmittingClaim, setIsSubmittingClaim] = useState(false);
@@ -86,6 +121,7 @@ export default function ItemDetailsPage() {
     }
 
     setIsSubmittingClaim(true);
+    setClaimErrors({});
 
     try {
       const res = await submitOwnershipClaim({
@@ -99,11 +135,11 @@ export default function ItemDetailsPage() {
         setGeneratedClaimId(res.claimId);
         setClaimSuccess(true);
       } else {
-        alert(res.error || 'Could not submit claim. Please try again.');
+        setClaimErrors({ server: res.error || 'Could not submit claim. Please try again.' });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('An unexpected error occurred. Please try again.');
+      setClaimErrors({ server: err?.message || 'An unexpected error occurred. Please try again.' });
     } finally {
       setIsSubmittingClaim(false);
     }
@@ -136,6 +172,19 @@ export default function ItemDetailsPage() {
         );
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
+        <Navbar />
+        <main className="flex-1 py-20 px-4 text-center max-w-lg mx-auto space-y-3">
+          <div className="h-8 w-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-xs font-medium text-slate-500">Retrieving item from PostgreSQL database...</p>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   // If item not found
   if (!item) {
@@ -182,10 +231,21 @@ export default function ItemDetailsPage() {
             Home
           </Link>
           <span>/</span>
-          <Link href="/browse" className="hover:text-indigo-600 transition-colors">
-            Browse Registry
-          </Link>
-          <span>/</span>
+          {currentUser?.role === 'ADMIN' || currentUser?.role === 'SECURITY' ? (
+            <>
+              <Link href="/browse" className="hover:text-indigo-600 transition-colors">
+                Browse Registry
+              </Link>
+              <span>/</span>
+            </>
+          ) : (
+            <>
+              <Link href="/dashboard" className="hover:text-indigo-600 transition-colors">
+                Dashboard
+              </Link>
+              <span>/</span>
+            </>
+          )}
           <span className="text-slate-900 font-semibold truncate max-w-xs sm:max-w-md">
             {item.title}
           </span>
@@ -194,11 +254,11 @@ export default function ItemDetailsPage() {
         {/* Back Link */}
         <div className="mb-6">
           <Link
-            href="/browse"
+            href={currentUser?.role === 'ADMIN' || currentUser?.role === 'SECURITY' ? '/browse' : '/dashboard'}
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-indigo-600 transition-colors"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Back to Found Registry
+            {currentUser?.role === 'ADMIN' || currentUser?.role === 'SECURITY' ? 'Back to Registry' : 'Back to Dashboard'}
           </Link>
         </div>
 
@@ -437,6 +497,12 @@ export default function ItemDetailsPage() {
                       </div>
 
                       <form onSubmit={handleClaimSubmit} noValidate className="space-y-5">
+                        {claimErrors.server && (
+                          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+                            <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+                            <span>{claimErrors.server}</span>
+                          </div>
+                        )}
                         
                         {/* Claimant info banner */}
                         <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 flex items-center justify-between text-xs text-slate-600">

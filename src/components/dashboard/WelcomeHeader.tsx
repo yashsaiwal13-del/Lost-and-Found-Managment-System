@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React from 'react';
 import Link from 'next/link';
@@ -10,14 +10,23 @@ import {
   Bell, 
   Shield 
 } from 'lucide-react';
-import { STUDENT_PROFILE, STUDENT_STATS } from '@/data/mockData';
 
 interface WelcomeHeaderProps {
+  userName?: string | null;
+  studentId?: string | null;
   onOpenSidebar: () => void;
   onOpenReportModal: (type: 'lost' | 'found') => void;
 }
 
-export default function WelcomeHeader({ onOpenSidebar, onOpenReportModal }: WelcomeHeaderProps) {
+export default function WelcomeHeader({ 
+  userName, 
+  studentId,
+  onOpenSidebar, 
+  onOpenReportModal 
+}: WelcomeHeaderProps) {
+  const displayName = userName || 'Student';
+  const initial = displayName.charAt(0).toUpperCase();
+
   return (
     <header className="bg-white border-b border-slate-200/80 sticky top-0 z-30">
       <div className="px-4 sm:px-6 lg:px-8 py-5">
@@ -39,7 +48,7 @@ export default function WelcomeHeader({ onOpenSidebar, onOpenReportModal }: Welc
           </div>
 
           <div className="h-8 w-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
-            {STUDENT_PROFILE.name.charAt(0)}
+            {initial}
           </div>
         </div>
 
@@ -53,30 +62,26 @@ export default function WelcomeHeader({ onOpenSidebar, onOpenReportModal }: Welc
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 Student Account Verified
               </span>
-              <span className="text-xs text-slate-400">•</span>
-              <span className="text-xs text-slate-500 font-medium">
-                {STUDENT_PROFILE.major} ({STUDENT_PROFILE.year})
-              </span>
+              {studentId && (
+                <>
+                  <span className="text-xs text-slate-400">•</span>
+                  <span className="text-xs text-slate-500 font-mono font-medium">
+                    ID: {studentId}
+                  </span>
+                </>
+              )}
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              Welcome back, {STUDENT_PROFILE.name}! 👋
+              Welcome back, {displayName}! 👋
             </h1>
 
             <p className="text-xs sm:text-sm text-slate-500 mt-1">
-              You currently have{' '}
-              <span className="font-semibold text-indigo-600">
-                {STUDENT_STATS.possibleMatches} possible matches
-              </span>{' '}
-              and{' '}
-              <span className="font-semibold text-amber-600">
-                {STUDENT_STATS.pendingClaims} claim under review
-              </span>{' '}
-              by Campus Safety.
+              Track your reported belongings, check live status updates, and manage ownership claims in real time.
             </p>
           </div>
 
-          {/* Core Action Buttons (Requested) */}
+          {/* Core Action Buttons */}
           <div className="flex items-center gap-3 pt-2 md:pt-0">
             
             {/* Report Lost Item Button */}

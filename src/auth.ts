@@ -2,7 +2,11 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import prisma from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
-import { findUserByEmail } from '@/lib/userStore';
+import { checkRateLimit, resetRateLimit } from '@/lib/rateLimit';
+
+if (!process.env.AUTH_SECRET) {
+  throw new Error('AUTH_SECRET environment variable is missing. Please set AUTH_SECRET in your .env file.');
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -20,62 +24,48 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const email = (credentials.email as string).toLowerCase().trim();
         const password = credentials.password as string;
 
-        // 1. Try Prisma lookup if PostgreSQL is reachable
-        try {
-          const user = await prisma.user.findUnique({
-            where: { email },
-          });
+        // Rate limit: 5 failed attempts per 15 minutes per email
+        const rateCheck = checkRateLimit({
+          key: `login:${email}`,
+          maxAttempts: 5,
+          windowMs: 15 * 60 * 1000,
+        });
 
-          if (user && user.password) {
-            const isValidPassword = await bcrypt.compare(password, user.password);
-            if (isValidPassword) {
-              return {
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                studentId: user.studentId,
-              };
-            }
-          }
-        } catch (error) {
-          // Gracefully continue to fallback store if PostgreSQL is unreachable
-          console.warn('Database server currently offline on localhost:5432. Authenticating via fallback store...');
+        if (!rateCheck.success) {
+          throw new Error('Too many login attempts. Please wait 15 minutes before trying again.');
         }
 
-        // 2. Check registered accounts & demo users in fallback store
-        const fallbackUser = findUserByEmail(email);
-        if (fallbackUser && fallbackUser.password) {
-          let isValid = false;
-          if (fallbackUser.password.startsWith('$2')) {
-            isValid = await bcrypt.compare(password, fallbackUser.password);
-          } else {
-            isValid = fallbackUser.password === password;
-          }
+        // Query user from PostgreSQL via Prisma exclusively
+        const user = await prisma.user.findUnique({
+          where: { email },
+        });
 
-          if (isValid) {
-            return {
-              id: fallbackUser.id,
-              name: fallbackUser.name,
-              email: fallbackUser.email,
-              role: fallbackUser.role,
-              studentId: fallbackUser.studentId || undefined,
-            };
-          }
+        if (!user || !user.password) {
+          return null;
         }
 
-        // 3. Fallback for admin demo
-        if (email === 'admin@campus.edu' && password === 'password123') {
-          return {
-            id: 'demo-admin-system',
-            name: 'System Admin',
-            email: 'admin@campus.edu',
-            role: 'ADMIN',
-            studentId: 'ADM-001',
-          };
+        // Verify password hash exclusively with bcrypt
+        const isValidPassword = await bcrypt.compare(password, user.password);
+        if (!isValidPassword) {
+          return null;
         }
 
-        return null;
+        // Reset rate limit on successful authentication
+        resetRateLimit(`login:${email}`);
+
+        // Stamp lastLoginAt in PostgreSQL on successful login
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { lastLoginAt: new Date() },
+        });
+
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          studentId: user.studentId,
+        };
       },
     }),
   ],
@@ -103,5 +93,5 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: {
     strategy: 'jwt',
   },
-  secret: process.env.AUTH_SECRET || 'campusfind-auth-secret-key-32chars-min-ok',
+  secret: process.env.AUTH_SECRET,
 });

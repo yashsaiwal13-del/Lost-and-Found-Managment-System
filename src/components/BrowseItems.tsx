@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   Search, 
@@ -12,10 +12,13 @@ import {
   AlertCircle, 
   ArrowUpRight,
   Filter,
-  X
+  X,
+  Loader2
 } from 'lucide-react';
 import { CampusItem, Category } from '@/types';
-import { MOCK_ITEMS, CATEGORIES, CAMPUS_LOCATIONS } from '@/data/mockData';
+import { CATEGORIES } from '@/lib/constants';
+import { CAMPUS_LOCATIONS } from '@/lib/campusLocations';
+import { getAllCampusItems } from '@/app/actions/getItems';
 
 interface BrowseItemsProps {
   initialSearchQuery?: string;
@@ -26,6 +29,8 @@ export default function BrowseItems({
   initialSearchQuery = '',
   initialLocation = 'All Locations',
 }: BrowseItemsProps) {
+  const [items, setItems] = useState<CampusItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedType, setSelectedType] = useState<'all' | 'found' | 'lost'>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedLocation, setSelectedLocation] = useState<string>(initialLocation);
@@ -33,9 +38,27 @@ export default function BrowseItems({
   const [activeModalItem, setActiveModalItem] = useState<CampusItem | null>(null);
   const [claimSuccess, setClaimSuccess] = useState(false);
 
+  useEffect(() => {
+    let isMounted = true;
+    getAllCampusItems({ limit: 50 })
+      .then((data) => {
+        if (isMounted && data) {
+          setItems(data);
+        }
+      })
+      .catch((err) => console.error('Failed to fetch items:', err))
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Filter items dynamically based on controls
   const filteredItems = useMemo(() => {
-    return MOCK_ITEMS.filter((item) => {
+    return items.filter((item) => {
       // Filter by type
       if (selectedType !== 'all' && item.type !== selectedType) {
         return false;
@@ -60,7 +83,7 @@ export default function BrowseItems({
       }
       return true;
     });
-  }, [selectedType, selectedCategory, selectedLocation, searchQuery]);
+  }, [items, selectedType, selectedCategory, selectedLocation, searchQuery]);
 
   const handleClaimSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,10 +106,10 @@ export default function BrowseItems({
               Live Campus Registry
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-              Browse Lost & Found Items
+              Browse Lost &amp; Found Items
             </h2>
             <p className="text-slate-500 text-sm mt-1">
-              Currently indexing {MOCK_ITEMS.length} mock items reported across campus buildings.
+              Currently indexing items reported across campus buildings in PostgreSQL.
             </p>
           </div>
 
@@ -100,7 +123,7 @@ export default function BrowseItems({
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              All Items ({MOCK_ITEMS.length})
+              All Items ({items.length})
             </button>
             <button
               onClick={() => setSelectedType('found')}
@@ -110,7 +133,7 @@ export default function BrowseItems({
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Found Items ({MOCK_ITEMS.filter((i) => i.type === 'found').length})
+              Found Items ({items.filter((i) => i.type === 'found').length})
             </button>
             <button
               onClick={() => setSelectedType('lost')}
@@ -120,7 +143,7 @@ export default function BrowseItems({
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Lost Reports ({MOCK_ITEMS.filter((i) => i.type === 'lost').length})
+              Lost Reports ({items.filter((i) => i.type === 'lost').length})
             </button>
           </div>
         </div>
@@ -195,8 +218,16 @@ export default function BrowseItems({
 
         </div>
 
+        {/* Loading State */}
+        {loading && (
+          <div className="py-20 text-center space-y-3">
+            <div className="h-8 w-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-xs font-medium text-slate-500">Loading items from PostgreSQL database...</p>
+          </div>
+        )}
+
         {/* Item Cards Grid */}
-        {filteredItems.length === 0 ? (
+        {!loading && filteredItems.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-slate-300">
             <div className="h-12 w-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
               <Search className="h-6 w-6" />
@@ -217,7 +248,7 @@ export default function BrowseItems({
               Reset All Filters
             </button>
           </div>
-        ) : (
+        ) : !loading && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredItems.map((item) => {
               const isFound = item.type === 'found';
@@ -225,15 +256,14 @@ export default function BrowseItems({
               return (
                 <div
                   key={item.id}
-                  className="bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-md hover:border-slate-300 transition-all duration-200 flex flex-col justify-between overflow-hidden group"
+                  className="bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between overflow-hidden group"
                 >
-                  {/* Card Top / Header */}
                   <div className="p-5">
                     
+                    {/* Badge row */}
                     <div className="flex items-center justify-between gap-2 mb-3">
-                      {/* Type Badge */}
                       <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold tracking-wide uppercase ${
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                           isFound
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             : 'bg-rose-50 text-rose-700 border border-rose-200'
@@ -301,7 +331,7 @@ export default function BrowseItems({
                       href={`/items/${item.id}`}
                       className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-all"
                     >
-                      <span>View &amp; Claim</span>
+                      <span>View Details</span>
                       <ArrowUpRight className="h-3 w-3" />
                     </Link>
                   </div>
@@ -313,105 +343,6 @@ export default function BrowseItems({
         )}
 
       </div>
-
-      {/* Interactive Claim Mock Modal */}
-      {activeModalItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 relative">
-            
-            <button
-              onClick={() => setActiveModalItem(null)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
-            {claimSuccess ? (
-              <div className="text-center py-6">
-                <div className="h-12 w-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-3">
-                  <CheckCircle2 className="h-7 w-7" />
-                </div>
-                <h3 className="text-lg font-bold text-slate-900">Claim Submitted for Review</h3>
-                <p className="text-xs text-slate-600 mt-2 max-w-sm mx-auto">
-                  Campus Security has received your verification request for <span className="font-semibold text-slate-800">{activeModalItem.title}</span>. You will receive an SMS and email notification once verified.
-                </p>
-                <div className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full">
-                  Estimated review: 15-30 minutes
-                </div>
-              </div>
-            ) : (
-              <div>
-                <div className="flex items-center gap-2 text-indigo-600 text-xs font-semibold mb-1 uppercase tracking-wider">
-                  <Shield className="h-4 w-4" />
-                  Ownership Claim Verification
-                </div>
-
-                <h3 className="text-lg font-bold text-slate-900">
-                  Claim &quot;{activeModalItem.title}&quot;
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Item #{activeModalItem.id} is securely held at {activeModalItem.storageLocation || 'Campus Security'}.
-                </p>
-
-                <form onSubmit={handleClaimSubmit} className="mt-5 space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Your Full Name
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Maya Lin"
-                      className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      College Student / Staff ID Number
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. STU-2024-8891"
-                      className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Proof of Ownership / Unique Identifying Features
-                    </label>
-                    <textarea
-                      rows={3}
-                      required
-                      placeholder="Describe private details (e.g. lock screen wallpaper, specific scratch, serial number, or exact stickers) that verify it is yours..."
-                      className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:bg-white"
-                    />
-                  </div>
-
-                  <div className="pt-2 flex items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setActiveModalItem(null)}
-                      className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs"
-                    >
-                      Submit Claim to Security
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
-
-          </div>
-        </div>
-      )}
     </section>
   );
 }

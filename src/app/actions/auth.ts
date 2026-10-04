@@ -2,9 +2,14 @@
 
 import prisma from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
-import { signIn, signOut, auth } from '@/auth';
-import { UserRole } from '@prisma/client';
-import { saveFallbackUser, findUserByEmail, findUserByStudentId } from '@/lib/userStore';
+import { auth } from '@/auth';
+import { UserRole } from '@/lib/enums';
+import { 
+  studentRegistrationSchema, 
+  adminProfileUpdateSchema, 
+  formatZodError 
+} from '@/lib/validations';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 export interface RegisterStudentInput {
   name: string;
@@ -28,22 +33,38 @@ export interface AuthActionResult {
 
 /**
  * Register a new Student account in PostgreSQL using Prisma and bcryptjs.
+ * Strictly validated via Zod and rate-limited.
  */
 export async function registerStudent(input: RegisterStudentInput): Promise<AuthActionResult> {
-  const name = input.name?.trim();
-  const email = input.email?.trim().toLowerCase();
-  const studentId = input.studentId?.trim().toUpperCase();
-  const password = input.password;
+  // 1. Zod input schema validation
+  const parsed = studentRegistrationSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: formatZodError(parsed.error),
+    };
+  }
 
-  if (!name) return { success: false, error: 'Full name is required.' };
-  if (!email || !email.includes('@')) return { success: false, error: 'A valid college email address is required.' };
-  if (!studentId) return { success: false, error: 'Student ID number is required.' };
-  if (!password || password.length < 6) return { success: false, error: 'Password must be at least 6 characters long.' };
+  const { name, email, studentId, password, phone } = parsed.data;
+
+  // 2. Rate limit registration attempts (10 attempts per 1 hour per email)
+  const rateLimitResult = checkRateLimit({
+    key: `register:${email}`,
+    maxAttempts: 10,
+    windowMs: 60 * 60 * 1000,
+  });
+
+  if (!rateLimitResult.success) {
+    return {
+      success: false,
+      error: rateLimitResult.error || 'Too many registration attempts. Please try again later.',
+    };
+  }
 
   try {
     const existingEmail = await prisma.user.findUnique({ where: { email } });
     if (existingEmail) {
-      return { success: false, error: 'An account with this email already exists.' };
+      return { success: false, error: 'An account with this collegiate email already exists.' };
     }
 
     const existingStudentId = await prisma.user.findUnique({ where: { studentId } });
@@ -51,7 +72,7 @@ export async function registerStudent(input: RegisterStudentInput): Promise<Auth
       return { success: false, error: 'An account with this Student ID already exists.' };
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     const newUser = await prisma.user.create({
       data: {
@@ -59,20 +80,9 @@ export async function registerStudent(input: RegisterStudentInput): Promise<Auth
         email,
         studentId,
         password: hashedPassword,
-        role: UserRole.STUDENT,
-        phone: input.phone?.trim() || null,
+        role: UserRole.STUDENT, // Strictly forced to STUDENT server-side
+        phone: phone?.trim() || null,
       },
-    });
-
-    saveFallbackUser({
-      id: newUser.id,
-      name: newUser.name,
-      email: newUser.email,
-      studentId: newUser.studentId,
-      phone: newUser.phone,
-      password: hashedPassword,
-      role: 'STUDENT',
-      createdAt: new Date(),
     });
 
     return {
@@ -86,38 +96,10 @@ export async function registerStudent(input: RegisterStudentInput): Promise<Auth
       },
     };
   } catch (err: any) {
-    console.warn('Database note during student registration (saving to fallback store):', err?.message || err);
-
-    // Gracefully register in fallback store if PostgreSQL is unreachable
-    if (findUserByEmail(email)) {
-      return { success: false, error: 'An account with this email already exists.' };
-    }
-    if (findUserByStudentId(studentId)) {
-      return { success: false, error: 'An account with this Student ID already exists.' };
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const fallbackId = `usr_${Date.now()}`;
-    const registeredUser = saveFallbackUser({
-      id: fallbackId,
-      name,
-      email,
-      studentId,
-      phone: input.phone?.trim() || null,
-      password: hashedPassword,
-      role: 'STUDENT',
-      createdAt: new Date(),
-    });
-
+    console.error('Error during student registration in PostgreSQL:', err);
     return {
-      success: true,
-      user: {
-        id: registeredUser.id,
-        name: registeredUser.name,
-        email: registeredUser.email,
-        role: registeredUser.role,
-        studentId: registeredUser.studentId,
-      },
+      success: false,
+      error: 'Registration is temporarily unavailable, please try again.',
     };
   }
 }
@@ -138,5 +120,138 @@ export async function getCurrentUser() {
     };
   } catch (err) {
     return null;
+  }
+}
+
+/**
+ * Server Action: Logs out the user safely and invalidates authentication cookies.
+ */
+export async function logoutUser() {
+  const { signOut } = await import('@/auth');
+  await signOut({ redirectTo: '/login' });
+}
+
+export interface UpdateAdminProfileInput {
+  name?: string;
+  email?: string;
+  currentPassword: string;
+  newPassword?: string;
+  phone?: string;
+  studentId?: string;
+}
+
+export interface UpdateAdminProfileResult {
+  success: boolean;
+  error?: string;
+  passwordChanged?: boolean;
+}
+
+/**
+ * Updates admin display name, email, or password.
+ * Strictly verifies the current password with bcrypt before allowing modifications.
+ */
+export async function updateAdminProfile(input: UpdateAdminProfileInput): Promise<UpdateAdminProfileResult> {
+  const session = await auth();
+  if (!session?.user || (session.user as any).role !== 'ADMIN') {
+    return { success: false, error: 'Unauthorized: Admin privileges required.' };
+  }
+
+  const userId = (session.user as any).id;
+  if (!userId) {
+    return { success: false, error: 'Session user ID is missing.' };
+  }
+
+  const parsed = adminProfileUpdateSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: formatZodError(parsed.error),
+    };
+  }
+
+  const validData = parsed.data;
+  if (!validData.currentPassword) {
+    return { success: false, error: 'Current password is required to save changes.' };
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user || !user.password) {
+      return { success: false, error: 'User account not found.' };
+    }
+
+    // Verify current password with bcrypt
+    const isMatch = await bcrypt.compare(validData.currentPassword, user.password);
+    if (!isMatch) {
+      return { success: false, error: 'Incorrect current password.' };
+    }
+
+    const updateData: { name?: string; email?: string; password?: string; phone?: string; studentId?: string } = {};
+
+    if (validData.name && validData.name.trim() !== '') {
+      updateData.name = validData.name.trim();
+    }
+
+    if (validData.email && validData.email.trim() !== '') {
+      const email = validData.email.trim().toLowerCase();
+      if (email !== user.email) {
+        const existing = await prisma.user.findUnique({ where: { email } });
+        if (existing && existing.id !== user.id) {
+          return { success: false, error: 'An account with this email address already exists.' };
+        }
+        updateData.email = email;
+      }
+    }
+
+    if (validData.phone !== undefined) {
+      updateData.phone = validData.phone?.trim() || undefined;
+    }
+
+    if (validData.studentId !== undefined) {
+      updateData.studentId = validData.studentId?.trim() || undefined;
+    }
+
+    let passwordChanged = false;
+    if (validData.newPassword && validData.newPassword.trim() !== '') {
+      updateData.password = await bcrypt.hash(validData.newPassword, 12);
+      passwordChanged = true;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return { success: true, passwordChanged: false };
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+    });
+
+    // Record non-sensitive admin settings change audit log
+    const { writeAuditLog } = await import('@/lib/audit');
+    await writeAuditLog({
+      actorId: userId,
+      action: 'ADMIN_SETTINGS_CHANGED',
+      targetType: 'USER',
+      targetId: userId,
+      metadata: {
+        nameUpdated: !!updateData.name,
+        emailUpdated: !!updateData.email,
+        passwordChanged,
+      },
+    });
+
+    return {
+      success: true,
+      passwordChanged,
+    };
+  } catch (err: any) {
+    console.error('Error updating admin profile:', err);
+    return {
+      success: false,
+      error: 'Failed to update admin profile. Please try again.',
+    };
   }
 }
