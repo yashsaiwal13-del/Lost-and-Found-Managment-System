@@ -14,20 +14,32 @@ import {
   Clock, 
   AlertCircle, 
   HelpCircle, 
-  FileText, 
   Lock, 
   Sparkles, 
-  Share2, 
-  Printer,
-  ChevronRight,
-  Info
+  Info,
+  Check,
+  RefreshCw
 } from 'lucide-react';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
+import { Header } from '@/components/ui/Header';
+import { Footer } from '@/components/ui/Footer';
+import { Icon, type IconName } from '@/components/ui/Icon';
+import { ImageViewerModal } from '@/components/ui/ImageViewerModal';
 import { getCurrentUser } from '@/app/actions/auth';
 import { CampusItem } from '@/types';
 import { submitOwnershipClaim } from '@/app/actions/claims';
 import { getCampusItemById } from '@/app/actions/getItems';
+
+function getItemIcon(category: string, name: string): IconName {
+  const lower = `${name} ${category}`.toLowerCase();
+  if (lower.includes('headphone') || lower.includes('airpod') || lower.includes('audio') || lower.includes('earbud')) return 'headphones';
+  if (lower.includes('wallet') || lower.includes('purse') || lower.includes('card')) return 'wallet';
+  if (lower.includes('bottle') || lower.includes('flask') || lower.includes('mug')) return 'bottle';
+  if (lower.includes('phone') || lower.includes('iphone') || lower.includes('mobile')) return 'phone';
+  if (lower.includes('bag') || lower.includes('backpack') || lower.includes('tote')) return 'bag';
+  if (lower.includes('key')) return 'key';
+  if (lower.includes('laptop') || lower.includes('macbook')) return 'laptop';
+  return 'sparkle';
+}
 
 export default function ItemDetailsPage() {
   const params = useParams();
@@ -37,6 +49,7 @@ export default function ItemDetailsPage() {
   const [item, setItem] = useState<CampusItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [fullImage, setFullImage] = useState<{ url: string; title: string; subtitle: string } | null>(null);
 
   useEffect(() => {
     getCurrentUser().then((u) => {
@@ -72,7 +85,7 @@ export default function ItemDetailsPage() {
     };
   }, [itemId]);
 
-  // Claim Form State (Visible so student can verify immediately)
+  // Claim Form State
   const [showClaimForm, setShowClaimForm] = useState(true);
   const [claimData, setClaimData] = useState({
     exactColor: '',
@@ -145,41 +158,13 @@ export default function ItemDetailsPage() {
     }
   };
 
-  // Helper for status badge
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'pending_verification':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200">
-            <Clock className="h-3.5 w-3.5 text-amber-600" />
-            Claim Pending Verification
-          </span>
-        );
-      case 'resolved':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200">
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-            Reunited with Owner
-          </span>
-        );
-      case 'open':
-      default:
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            In Security Custody (Awaiting Owner Claim)
-          </span>
-        );
-    }
-  };
-
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
-        <Navbar />
-        <main className="flex-1 py-20 px-4 text-center max-w-lg mx-auto space-y-3">
-          <div className="h-8 w-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-xs font-medium text-slate-500">Retrieving item from PostgreSQL database...</p>
+      <div className="app">
+        <Header />
+        <main className="dashboard-page section-shell" style={{ textAlign: 'center', padding: '120px 20px' }}>
+          <RefreshCw className="h-8 w-8 animate-spin" style={{ color: 'var(--purple)', margin: '0 auto 12px' }} />
+          <p style={{ fontSize: '13px', color: 'var(--muted)', fontWeight: 600 }}>Retrieving item from campus database...</p>
         </main>
         <Footer />
       </div>
@@ -189,29 +174,23 @@ export default function ItemDetailsPage() {
   // If item not found
   if (!item) {
     return (
-      <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
-        <Navbar />
-        <main className="flex-1 py-16 px-4 text-center max-w-lg mx-auto">
-          <div className="h-16 w-16 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="h-8 w-8" />
-          </div>
-          <h1 className="text-xl font-bold text-slate-900">Item Not Found</h1>
-          <p className="text-xs text-slate-500 mt-2">
-            No item matching reference code &quot;{itemId}&quot; exists in the campus lost &amp; found registry.
-          </p>
-          <div className="mt-6 flex justify-center gap-3">
-            <Link
-              href="/browse"
-              className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-colors"
-            >
-              Browse Registry
-            </Link>
-            <Link
-              href="/"
-              className="px-5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 transition-colors"
-            >
-              Return Home
-            </Link>
+      <div className="app">
+        <Header />
+        <main className="dashboard-page section-shell" style={{ textAlign: 'center', padding: '100px 20px' }}>
+          <div className="recent-empty" style={{ maxWidth: '480px', margin: '0 auto' }}>
+            <AlertCircle className="h-10 w-10" style={{ color: 'var(--coral)', margin: '0 auto 10px' }} />
+            <h1 style={{ font: '800 24px "Manrope"', color: 'var(--navy)', margin: '0 0 8px' }}>Item Not Found</h1>
+            <p style={{ margin: 0, fontSize: '12px' }}>
+              No item matching reference code &quot;{itemId}&quot; exists in the campus lost &amp; found registry.
+            </p>
+            <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'center', gap: '8px' }}>
+              <Link href="/browse" className="button button-found">
+                Browse Registry
+              </Link>
+              <Link href="/" className="button button-ghost">
+                Return Home
+              </Link>
+            </div>
           </div>
         </main>
         <Footer />
@@ -219,468 +198,346 @@ export default function ItemDetailsPage() {
     );
   }
 
+  const iconName = getItemIcon(item.category, item.title);
+
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
-      <Navbar />
+    <div className="app">
+      <Header />
 
-      <main className="flex-1 py-10 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto w-full">
+      <main className="dashboard-page section-shell" style={{ paddingBottom: '90px' }}>
         
-        {/* Breadcrumb Navigation */}
-        <nav className="flex items-center gap-2 text-xs text-slate-500 mb-6">
-          <Link href="/" className="hover:text-indigo-600 transition-colors">
-            Home
-          </Link>
-          <span>/</span>
-          {currentUser?.role === 'ADMIN' || currentUser?.role === 'SECURITY' ? (
-            <>
-              <Link href="/browse" className="hover:text-indigo-600 transition-colors">
-                Browse Registry
-              </Link>
-              <span>/</span>
-            </>
-          ) : (
-            <>
-              <Link href="/dashboard" className="hover:text-indigo-600 transition-colors">
-                Dashboard
-              </Link>
-              <span>/</span>
-            </>
-          )}
-          <span className="text-slate-900 font-semibold truncate max-w-xs sm:max-w-md">
-            {item.title}
-          </span>
-        </nav>
-
-        {/* Back Link */}
-        <div className="mb-6">
+        {/* Navigation Breadcrumb */}
+        <div style={{ marginBottom: '24px' }}>
           <Link
             href={currentUser?.role === 'ADMIN' || currentUser?.role === 'SECURITY' ? '/browse' : '/dashboard'}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-indigo-600 transition-colors"
+            className="back-link"
+            style={{ marginBottom: '14px', display: 'inline-flex' }}
           >
-            <ArrowLeft className="h-3.5 w-3.5" />
+            <Icon name="arrow" size={16} />
             {currentUser?.role === 'ADMIN' || currentUser?.role === 'SECURITY' ? 'Back to Registry' : 'Back to Dashboard'}
           </Link>
         </div>
 
-        {/* Main Content Grid: 2 cols on desktop */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* 2-Column Presentation Layout */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '32px', alignItems: 'flex-start' }}>
           
-          {/* Col 1 & 2: Main Item Presentation */}
-          <div className="lg:col-span-2 space-y-6">
+          {/* Col 1: Main Item Card & Claim Form */}
+          <div style={{ display: 'grid', gap: '24px' }}>
             
-            {/* Main Item Card */}
-            <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-8 shadow-xs">
-              
-              {/* 1. Item Photo Container */}
-              <div className="relative w-full h-64 sm:h-80 rounded-2xl bg-gradient-to-tr from-slate-100 via-indigo-50/40 to-slate-100 border border-slate-200/80 flex flex-col items-center justify-center p-6 text-center overflow-hidden group">
-                
-                {/* Visual Category Illustration / Placeholder */}
-                <div className="h-24 w-24 rounded-2xl bg-white shadow-md border border-slate-200 flex items-center justify-center text-indigo-600 group-hover:scale-105 transition-transform duration-200 mb-3">
-                  <Tag className="h-10 w-10 text-indigo-600" />
-                </div>
-
-                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  {item.category}
-                </span>
-                <span className="text-[11px] text-slate-400 mt-0.5">
-                  Official Campus Safety Evidence Custody #{item.id}
-                </span>
-
-                {/* Status Overlay Badge */}
-                <div className="absolute top-4 left-4">
-                  {getStatusBadge(item.status)}
-                </div>
-
-                {/* Reference ID Pill */}
-                <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-xs px-3 py-1 rounded-full text-xs font-mono font-bold text-slate-600 border border-slate-200 shadow-2xs">
-                  Ref: #{item.id}
-                </div>
-              </div>
-
-              {/* 2. Item Name */}
-              <div className="mt-6">
-                <div className="flex flex-wrap items-center gap-2 mb-2">
-                  {/* 3. Category */}
-                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-md">
-                    <Tag className="h-3 w-3" />
-                    {item.category}
-                  </span>
-                  <span className="text-xs text-slate-400">•</span>
-                  <span className="text-xs text-slate-500 font-medium">
-                    Reported by {item.reportedBy.role} ({item.reportedBy.name})
-                  </span>
-                </div>
-
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-                  {item.title}
-                </h1>
-              </div>
-
-              {/* 4. Found Location & 5. Found Date */}
-              <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                <div className="flex items-start gap-3">
-                  <div className="h-9 w-9 rounded-xl bg-white border border-slate-200 text-indigo-600 flex items-center justify-center shrink-0">
-                    <MapPin className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                      Found Location
-                    </span>
-                    <span className="text-xs font-bold text-slate-800">
-                      {item.location}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="h-9 w-9 rounded-xl bg-white border border-slate-200 text-slate-500 flex items-center justify-center shrink-0">
-                    <Calendar className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                      Found Date &amp; Time
-                    </span>
-                    <span className="text-xs font-bold text-slate-800">
-                      {item.date}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Current Storage Custody */}
-              {item.storageLocation && (
-                <div className="mt-4 p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-100 flex items-center gap-3">
-                  <Building2 className="h-5 w-5 text-emerald-600 shrink-0" />
-                  <div className="text-xs">
-                    <span className="text-slate-500">Currently Secured At: </span>
-                    <span className="font-bold text-emerald-900">{item.storageLocation}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* 6. Description */}
-              <div className="mt-6 pt-6 border-t border-slate-100">
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  Public Description &amp; Details
-                </h3>
-                <p className="text-xs sm:text-sm text-slate-700 leading-relaxed bg-white border border-slate-200 p-4 rounded-xl">
-                  {item.description}
-                </p>
-              </div>
-
-              {/* 7. Status Explanation & CTA Bar */}
-              <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div>
-                  <span className="text-xs font-bold text-slate-800 block">
-                    Is this your belonging?
-                  </span>
-                  <span className="text-xs text-slate-500">
-                    Answer 3 quick identifying questions to verify ownership with security.
-                  </span>
-                </div>
-
-                {/* Submit Ownership Claim Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowClaimForm(true);
-                    // Smooth scroll down to form
-                    setTimeout(() => {
-                      document.getElementById('claim-form-section')?.scrollIntoView({ behavior: 'smooth' });
-                    }, 100);
-                  }}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/25 active:scale-95 transition-all cursor-pointer"
-                >
-                  <ShieldCheck className="h-4 w-4" />
-                  <span>Submit Ownership Claim</span>
-                </button>
-              </div>
-
-            </div>
-
-            {/* OWNERSHIP CLAIM FORM SECTION */}
-            <div id="claim-form-section">
-              {showClaimForm && (
-                <div className="bg-white rounded-3xl border border-indigo-200 p-6 sm:p-8 shadow-lg shadow-indigo-100/50 animate-in slide-in-from-top duration-300">
-                  
-                  {claimSuccess ? (
-                    /* Claim Success Confirmation */
-                    <div className="text-center py-6">
-                      <div className="h-16 w-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4">
-                        <CheckCircle2 className="h-10 w-10" />
-                      </div>
-
-                      <span className="inline-flex items-center gap-1 text-xs font-bold px-3 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 mb-2">
-                        Claim Received by Campus Security
-                      </span>
-
-                      <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-                        Ownership Claim Submitted!
-                      </h2>
-
-                      <p className="text-xs sm:text-sm text-slate-600 mt-2 max-w-md mx-auto leading-relaxed">
-                        Your verification answers for <span className="font-semibold text-slate-800">{item.title}</span> have been sent to the Campus Safety Office for cross-examination.
-                      </p>
-
-                      {/* Claim Summary Card */}
-                      <div className="mt-6 p-4 bg-slate-50 rounded-2xl border border-slate-200 max-w-md mx-auto text-left text-xs space-y-2">
-                        <div className="flex justify-between pb-2 border-b border-slate-200">
-                          <span className="text-slate-500 font-medium">Claim Reference</span>
-                          <span className="font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">
-                            {generatedClaimId}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-500">Claimant:</span>
-                          <span className="font-semibold text-slate-800">{claimData.studentName} ({claimData.studentId})</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-500">Pick-up Location:</span>
-                          <span className="font-medium text-slate-700">{item.storageLocation || 'Main Security Desk'}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-500">Estimated Review Time:</span>
-                          <span className="font-medium text-emerald-700">15 – 30 Minutes</span>
-                        </div>
-                      </div>
-
-                      {/* Next Steps Reminder */}
-                      <div className="mt-5 p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl text-xs text-indigo-900 max-w-md mx-auto text-left flex items-start gap-2.5">
-                        <Info className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
-                        <span>
-                          Please bring your official <strong>College Student ID card</strong> to the Security Desk when collecting your belonging.
-                        </span>
-                      </div>
-
-                      {/* Action buttons */}
-                      <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-                        <Link
-                          href="/dashboard"
-                          className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-xs"
-                        >
-                          Track in Student Dashboard
-                        </Link>
-                        <Link
-                          href="/browse"
-                          className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors"
-                        >
-                          Browse Other Items
-                        </Link>
-                      </div>
-
+            {/* Main Item Presentation Card */}
+            <article className="recent-card mint" style={{ padding: 0, overflow: 'hidden' }}>
+              <div
+                className="recent-art"
+                style={{
+                  height: '240px',
+                  position: 'relative',
+                  cursor: item.image ? 'pointer' : 'default',
+                  background: item.image ? '#1d151a' : undefined,
+                }}
+                onClick={() => {
+                  if (item.image) {
+                    setFullImage({
+                      url: item.image,
+                      title: item.title,
+                      subtitle: `Ref #${item.id} · ${item.category} · Found at ${item.location}`,
+                    });
+                  }
+                }}
+              >
+                <span className="recent-pill" style={{ zIndex: 2 }}>Ref #{item.id} · Found Item</span>
+                {item.image ? (
+                  <>
+                    <img
+                      src={item.image}
+                      alt={item.title}
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
+                    <div
+                      style={{
+                        position: 'absolute',
+                        right: '16px',
+                        bottom: '16px',
+                        background: 'rgba(0,0,0,0.65)',
+                        color: 'white',
+                        padding: '6px 12px',
+                        borderRadius: '99px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        backdropFilter: 'blur(4px)',
+                        zIndex: 2,
+                      }}
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      <span>Click to Examine Full Image</span>
                     </div>
-                  ) : (
-                    /* The 3-Question Ownership Claim Form */
-                    <div>
-                      <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
-                        <div className="flex items-center gap-2">
-                          <div className="h-9 w-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                            <ShieldCheck className="h-5 w-5" />
-                          </div>
-                          <div>
-                            <h2 className="text-lg font-bold text-slate-900">
-                              Ownership Verification Claim
-                            </h2>
-                            <p className="text-xs text-slate-500">
-                              Claiming: <span className="font-semibold text-slate-700">{item.title}</span> (#{item.id})
-                            </p>
-                          </div>
-                        </div>
+                  </>
+                ) : (
+                  <Icon name={iconName} size={84} />
+                )}
+              </div>
 
-                        <button
-                          type="button"
-                          onClick={() => setShowClaimForm(false)}
-                          className="text-xs font-semibold text-slate-400 hover:text-slate-600 px-2 py-1 rounded-lg hover:bg-slate-100"
-                        >
-                          Cancel
-                        </button>
+              <div style={{ padding: '28px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
+                  <div>
+                    <span className="type-badge found">{item.category}</span>
+                    <h1 style={{ margin: '8px 0 0', font: '800 26px "Manrope"', color: 'var(--navy)', letterSpacing: '-.8px' }}>
+                      {item.title}
+                    </h1>
+                  </div>
+
+                  <span className="status ready">
+                    <i></i>
+                    In Custody Locker
+                  </span>
+                </div>
+
+                <div style={{ background: '#f1e6d7', padding: '16px', borderRadius: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', margin: '20px 0' }}>
+                  <div>
+                    <span style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)' }}>Discovery Spot</span>
+                    <strong style={{ display: 'block', color: 'var(--navy)', marginTop: '2px', fontSize: '12px' }}>{item.location}</strong>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)' }}>Date Logged</span>
+                    <strong style={{ display: 'block', color: 'var(--navy)', marginTop: '2px', fontSize: '12px' }}>{item.date}</strong>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)' }}>Custody Location</span>
+                    <strong style={{ display: 'block', color: 'var(--teal)', marginTop: '2px', fontSize: '12px' }}>{item.storageLocation || 'Campus Security Locker'}</strong>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)' }}>Reported by</span>
+                    <strong style={{ display: 'block', color: 'var(--navy)', marginTop: '2px', fontSize: '12px' }}>{item.reportedBy?.name || 'Campus Member'}</strong>
+                  </div>
+                </div>
+
+                <div>
+                  <span style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)' }}>Public Details &amp; Notes</span>
+                  <p style={{ margin: '6px 0 0', padding: '14px', background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: '12px', color: 'var(--ink)', fontSize: '12px', lineHeight: 1.6 }}>
+                    {item.description}
+                  </p>
+                </div>
+              </div>
+            </article>
+
+            {/* OWNERSHIP CLAIM FORM CONTAINER */}
+            <div id="claim-form-section">
+              {claimSuccess ? (
+                /* Success Screen */
+                <div className="success-state" style={{ background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: '20px', padding: '40px 30px' }}>
+                  <div className="success-art">
+                    <span className="success-ring ring-one"></span>
+                    <span className="success-ring ring-two"></span>
+                    <div className="success-icon" style={{ background: 'var(--teal)', color: 'white' }}>
+                      <Check className="h-6 w-6" />
+                    </div>
+                  </div>
+
+                  <span className="type-badge found" style={{ margin: '0 auto 10px', display: 'table' }}>
+                    Claim Received by Security
+                  </span>
+
+                  <h1>Ownership Claim Submitted!</h1>
+
+                  <p>
+                    Your verification proof answers for <strong>{item.title}</strong> have been securely dispatched to Campus Safety.
+                  </p>
+
+                  <div className="review-card" style={{ maxWidth: '420px', margin: '24px auto', textAlign: 'left' }}>
+                    <dl>
+                      <div>
+                        <dt>Claim Reference</dt>
+                        <dd style={{ color: 'var(--purple)', fontWeight: 800 }}>{generatedClaimId}</dd>
                       </div>
+                      <div>
+                        <dt>Claimant Account</dt>
+                        <dd>{claimData.studentName} ({claimData.studentId})</dd>
+                      </div>
+                      <div>
+                        <dt>Pick-up Spot</dt>
+                        <dd>{item.storageLocation || 'Main Campus Security Desk'}</dd>
+                      </div>
+                      <div>
+                        <dt>Review Time</dt>
+                        <dd style={{ color: 'var(--teal)' }}>15 – 30 Minutes</dd>
+                      </div>
+                    </dl>
+                  </div>
 
-                      <form onSubmit={handleClaimSubmit} noValidate className="space-y-5">
-                        {claimErrors.server && (
-                          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
-                            <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
-                            <span>{claimErrors.server}</span>
-                          </div>
-                        )}
-                        
-                        {/* Claimant info banner */}
-                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 flex items-center justify-between text-xs text-slate-600">
-                          <div>
-                            <span className="text-slate-400 block text-[10px] uppercase font-bold">Claimant Student Account</span>
-                            <span className="font-semibold text-slate-800">{claimData.studentName}</span>
-                          </div>
-                          <span className="font-mono text-slate-500">{claimData.studentId}</span>
-                        </div>
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '24px' }}>
+                    <Link href="/dashboard" className="button button-found">
+                      Track in Dashboard
+                    </Link>
+                    <Link href="/browse" className="button button-ghost">
+                      Browse More Items
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                /* 3-Question Verification Form */
+                <div style={{ background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: '20px', padding: '32px' }}>
+                  <div style={{ borderBottom: '1px solid var(--line)', paddingBottom: '16px', marginBottom: '20px' }}>
+                    <span className="section-kicker">Confidential ownership proof</span>
+                    <h2 style={{ font: '800 22px "Manrope"', color: 'var(--navy)', margin: '4px 0 2px' }}>
+                      Verify &amp; Claim Item
+                    </h2>
+                    <p style={{ margin: 0, fontSize: '12px', color: 'var(--muted)' }}>
+                      Answer these 3 secret questions. Answers are checked privately by Campus Security.
+                    </p>
+                  </div>
 
-                        {/* QUESTION 1: What is the exact color? */}
-                        <div>
-                          <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                            1. What is the exact color? <span className="text-rose-500">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="e.g. Matte black, rose gold with transparent bumper, deep navy blue..."
-                            value={claimData.exactColor}
-                            onChange={(e) => {
-                              setClaimData({ ...claimData, exactColor: e.target.value });
-                              if (claimErrors.exactColor) setClaimErrors({ ...claimErrors, exactColor: undefined });
-                            }}
-                            className={`w-full text-xs px-3.5 py-2.5 rounded-xl border bg-slate-50/50 focus:bg-white focus:outline-none transition-colors ${
-                              claimErrors.exactColor
-                                ? 'border-rose-400 bg-rose-50/30 focus:border-rose-500 text-rose-900'
-                                : 'border-slate-200 focus:border-indigo-500'
-                            }`}
-                          />
-                          {claimErrors.exactColor && (
-                            <p className="text-[11px] font-medium text-rose-600 mt-1 flex items-center gap-1">
-                              <AlertCircle className="h-3 w-3" />
-                              {claimErrors.exactColor}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* QUESTION 2: What unique mark does it have? */}
-                        <div>
-                          <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                            2. What unique mark does it have? <span className="text-rose-500">*</span>
-                          </label>
-                          <textarea
-                            rows={3}
-                            placeholder="e.g. Small scratch on the top corner, astronaut sticker on the back, lock screen wallpaper of a golden retriever, initials etched..."
-                            value={claimData.uniqueMark}
-                            onChange={(e) => {
-                              setClaimData({ ...claimData, uniqueMark: e.target.value });
-                              if (claimErrors.uniqueMark) setClaimErrors({ ...claimErrors, uniqueMark: undefined });
-                            }}
-                            className={`w-full text-xs px-3.5 py-2.5 rounded-xl border bg-slate-50/50 focus:bg-white focus:outline-none transition-colors ${
-                              claimErrors.uniqueMark
-                                ? 'border-rose-400 bg-rose-50/30 focus:border-rose-500 text-rose-900'
-                                : 'border-slate-200 focus:border-indigo-500'
-                            }`}
-                          />
-                          {claimErrors.uniqueMark && (
-                            <p className="text-[11px] font-medium text-rose-600 mt-1 flex items-center gap-1">
-                              <AlertCircle className="h-3 w-3" />
-                              {claimErrors.uniqueMark}
-                            </p>
-                          )}
-                          <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
-                            <Lock className="h-3 w-3 text-slate-400 shrink-0" />
-                            Kept confidential. Checked strictly by campus security against the held item.
-                          </p>
-                        </div>
-
-                        {/* QUESTION 3: Where did you last see it? */}
-                        <div>
-                          <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                            3. Where did you last see it? <span className="text-rose-500">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="e.g. Left on the 2nd floor library study table around 3:00 PM..."
-                            value={claimData.lastSeenLocation}
-                            onChange={(e) => {
-                              setClaimData({ ...claimData, lastSeenLocation: e.target.value });
-                              if (claimErrors.lastSeenLocation) setClaimErrors({ ...claimErrors, lastSeenLocation: undefined });
-                            }}
-                            className={`w-full text-xs px-3.5 py-2.5 rounded-xl border bg-slate-50/50 focus:bg-white focus:outline-none transition-colors ${
-                              claimErrors.lastSeenLocation
-                                ? 'border-rose-400 bg-rose-50/30 focus:border-rose-500 text-rose-900'
-                                : 'border-slate-200 focus:border-indigo-500'
-                            }`}
-                          />
-                          {claimErrors.lastSeenLocation && (
-                            <p className="text-[11px] font-medium text-rose-600 mt-1 flex items-center gap-1">
-                              <AlertCircle className="h-3 w-3" />
-                              {claimErrors.lastSeenLocation}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Submit Claim Button */}
-                        <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
-                          <button
-                            type="button"
-                            onClick={() => setShowClaimForm(false)}
-                            className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="submit"
-                            disabled={isSubmittingClaim}
-                            className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 active:scale-95 disabled:opacity-70 transition-all cursor-pointer"
-                          >
-                            {isSubmittingClaim ? (
-                              <>
-                                <div className="h-3.5 w-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                                <span>Verifying Claim...</span>
-                              </>
-                            ) : (
-                              <>
-                                <ShieldCheck className="h-4 w-4" />
-                                <span>Submit Claim to Security</span>
-                              </>
-                            )}
-                          </button>
-                        </div>
-
-                      </form>
+                  {claimErrors.server && (
+                    <div style={{ padding: '12px', background: 'var(--coral-soft)', color: 'var(--coral)', borderRadius: '10px', fontSize: '11px', marginBottom: '16px', fontWeight: 700 }}>
+                      {claimErrors.server}
                     </div>
                   )}
 
+                  <form onSubmit={handleClaimSubmit} style={{ display: 'grid', gap: '18px' }}>
+                    {/* Q1: Exact Color */}
+                    <div>
+                      <label style={{ fontSize: '11px', fontWeight: 800, color: 'var(--navy)', display: 'block', marginBottom: '6px' }}>
+                        1. What is the exact color or shade? *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Matte midnight black, rose gold with bumper case..."
+                        value={claimData.exactColor}
+                        onChange={(e) => {
+                          setClaimData({ ...claimData, exactColor: e.target.value });
+                          if (claimErrors.exactColor) setClaimErrors({ ...claimErrors, exactColor: undefined });
+                        }}
+                        style={{
+                          width: '100%',
+                          height: '44px',
+                          padding: '0 14px',
+                          borderRadius: '10px',
+                          border: `1px solid ${claimErrors.exactColor ? 'var(--coral)' : 'var(--line)'}`,
+                          background: '#f8f4ee',
+                          fontSize: '12px',
+                          outline: 0
+                        }}
+                      />
+                      {claimErrors.exactColor && (
+                        <span style={{ fontSize: '10px', color: 'var(--coral)', fontWeight: 700, marginTop: '4px', display: 'block' }}>
+                          {claimErrors.exactColor}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Q2: Unique Marks */}
+                    <div>
+                      <label style={{ fontSize: '11px', fontWeight: 800, color: 'var(--navy)', display: 'block', marginBottom: '6px' }}>
+                        2. What unique marks, stickers, or scratches does it have? *
+                      </label>
+                      <textarea
+                        rows={3}
+                        placeholder="e.g. Small scratch near top right corner, sticker on back, custom lockscreen..."
+                        value={claimData.uniqueMark}
+                        onChange={(e) => {
+                          setClaimData({ ...claimData, uniqueMark: e.target.value });
+                          if (claimErrors.uniqueMark) setClaimErrors({ ...claimErrors, uniqueMark: undefined });
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '12px 14px',
+                          borderRadius: '10px',
+                          border: `1px solid ${claimErrors.uniqueMark ? 'var(--coral)' : 'var(--line)'}`,
+                          background: '#f8f4ee',
+                          fontSize: '12px',
+                          outline: 0
+                        }}
+                      />
+                      {claimErrors.uniqueMark && (
+                        <span style={{ fontSize: '10px', color: 'var(--coral)', fontWeight: 700, marginTop: '4px', display: 'block' }}>
+                          {claimErrors.uniqueMark}
+                        </span>
+                      )}
+                      <small style={{ color: 'var(--muted)', fontSize: '10px', marginTop: '4px', display: 'block' }}>
+                        Kept confidential. Only seen by Campus Safety officers during verification.
+                      </small>
+                    </div>
+
+                    {/* Q3: Last Seen Spot */}
+                    <div>
+                      <label style={{ fontSize: '11px', fontWeight: 800, color: 'var(--navy)', display: 'block', marginBottom: '6px' }}>
+                        3. Where did you last see or remember having it? *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 2nd floor library study booth around 3:30 PM..."
+                        value={claimData.lastSeenLocation}
+                        onChange={(e) => {
+                          setClaimData({ ...claimData, lastSeenLocation: e.target.value });
+                          if (claimErrors.lastSeenLocation) setClaimErrors({ ...claimErrors, lastSeenLocation: undefined });
+                        }}
+                        style={{
+                          width: '100%',
+                          height: '44px',
+                          padding: '0 14px',
+                          borderRadius: '10px',
+                          border: `1px solid ${claimErrors.lastSeenLocation ? 'var(--coral)' : 'var(--line)'}`,
+                          background: '#f8f4ee',
+                          fontSize: '12px',
+                          outline: 0
+                        }}
+                      />
+                      {claimErrors.lastSeenLocation && (
+                        <span style={{ fontSize: '10px', color: 'var(--coral)', fontWeight: 700, marginTop: '4px', display: 'block' }}>
+                          {claimErrors.lastSeenLocation}
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isSubmittingClaim}
+                      className="button button-found"
+                      style={{ width: '100%', marginTop: '6px' }}
+                    >
+                      <ShieldCheck className="h-4 w-4" />
+                      {isSubmittingClaim ? 'Submitting Claim...' : 'Submit Claim to Campus Security'}
+                    </button>
+                  </form>
                 </div>
               )}
             </div>
 
           </div>
 
-          {/* Col 3: Sidebar Security Desk Guidance */}
-          <div className="space-y-6">
+          {/* Col 2: Sidebar Security Info Cards */}
+          <div style={{ display: 'grid', gap: '20px' }}>
             
-            {/* Safe Custody Card */}
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs">
-              <div className="flex items-center gap-2 text-indigo-600 font-bold text-xs mb-3">
+            {/* Safe Custody Protocol Card */}
+            <div style={{ background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: '16px', padding: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--purple)', fontWeight: 800, fontSize: '12px', marginBottom: '12px' }}>
                 <ShieldCheck className="h-4 w-4" />
                 Security Verification Protocol
               </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Campus security protects student property by keeping physical found items locked in designated safe lockers.
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--muted)', lineHeight: 1.6 }}>
+                Campus safety protects student belongings by locking found items in designated custody lockers until genuine owners submit matching proof.
               </p>
-              <div className="mt-4 pt-3 border-t border-slate-100 space-y-2 text-xs text-slate-500">
-                <p>• Only true owners know secret marks and passwords.</p>
-                <p>• Student ID card required at pickup.</p>
-                <p>• Unclaimed items held for 90 days per college policy.</p>
+              <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid var(--line)', display: 'grid', gap: '8px', fontSize: '11px', color: 'var(--navy)', fontWeight: 600 }}>
+                <div>• Only true owners know secret marks and identifying details.</div>
+                <div>• College Student ID card required at physical handover.</div>
+                <div>• Unclaimed items held safely for 90 days per policy.</div>
               </div>
             </div>
 
-            {/* Campus Safety Desk Info */}
-            <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-5 shadow-sm">
-              <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs mb-3">
-                <Building2 className="h-4 w-4" />
-                Main Security Desk
-              </div>
-              <p className="text-xs text-slate-300 leading-relaxed mb-3">
-                Visit the central security dispatch desk to collect verified items or turn in discovered property.
+            {/* Campus Safety Desk Card */}
+            <div style={{ background: 'var(--navy)', color: 'var(--paper)', borderRadius: '16px', padding: '24px' }}>
+              <span className="match-kicker" style={{ color: '#d4ae68' }}>Physical Collection Spot</span>
+              <h3 style={{ font: '800 18px "Manrope"', margin: '8px 0 6px', color: 'var(--paper)' }}>Main Security Desk</h3>
+              <p style={{ margin: '0 0 16px', fontSize: '12px', color: 'rgba(246,237,223,.65)', lineHeight: 1.5 }}>
+                Visit the central security dispatch desk to collect verified items once your claim is approved.
               </p>
-              <div className="text-xs space-y-1.5 text-slate-400 border-t border-slate-700/60 pt-3">
-                <p><span className="text-white font-medium">Building:</span> Administration Complex #4</p>
-                <p><span className="text-white font-medium">Room:</span> Ground Floor, Room 102</p>
-                <p><span className="text-white font-medium">Operating Hours:</span> 7:00 AM – 9:00 PM</p>
-                <p><span className="text-white font-medium">Dispatch Phone:</span> (555) 019-2834</p>
+              <div style={{ fontSize: '11px', display: 'grid', gap: '6px', borderTop: '1px solid rgba(246,237,223,.12)', paddingTop: '14px', color: 'rgba(246,237,223,.8)' }}>
+                <div><strong>Building:</strong> Administration Complex #4</div>
+                <div><strong>Room:</strong> Ground Floor, Room 102</div>
+                <div><strong>Hours:</strong> 7:00 AM – 9:00 PM Daily</div>
+                <div><strong>Desk Phone:</strong> (555) 019-2834</div>
               </div>
-            </div>
-
-            {/* Questions Notice */}
-            <div className="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-5 text-amber-900 text-xs">
-              <div className="flex items-center gap-1.5 font-bold mb-1.5 text-amber-800">
-                <HelpCircle className="h-4 w-4 text-amber-600" />
-                Why 3 Verification Questions?
-              </div>
-              <p className="leading-relaxed text-amber-800/90">
-                Asking about exact color, unique marks, and last seen location helps officers identify genuine owners within minutes without public exposure.
-              </p>
             </div>
 
           </div>
@@ -690,6 +547,15 @@ export default function ItemDetailsPage() {
       </main>
 
       <Footer />
+
+      {/* Full Image Viewer Lightbox */}
+      <ImageViewerModal
+        isOpen={!!fullImage}
+        imageUrl={fullImage?.url || null}
+        title={fullImage?.title}
+        subtitle={fullImage?.subtitle}
+        onClose={() => setFullImage(null)}
+      />
     </div>
   );
 }

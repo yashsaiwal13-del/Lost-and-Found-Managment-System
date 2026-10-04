@@ -3,20 +3,9 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { 
-  UserPlus, 
-  Mail, 
-  Lock, 
-  User, 
-  CreditCard, 
-  Phone, 
-  ArrowRight, 
-  AlertCircle, 
-  CheckCircle2,
-  Compass
-} from 'lucide-react';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
+import { Header } from '@/components/ui/Header';
+import { Footer } from '@/components/ui/Footer';
+import { Icon } from '@/components/ui/Icon';
 import { registerStudent } from '@/app/actions/auth';
 
 export default function RegisterPage() {
@@ -69,150 +58,208 @@ export default function RegisterPage() {
           router.push('/login');
         }, 2000);
       }
-    } catch (err: any) {
+    } catch {
       setError('An unexpected error occurred. Please try again.');
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
-      <Navbar />
+    <div className="app flex flex-col min-h-screen">
+      <Header />
 
-      <main className="flex-1 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-6 bg-white p-8 sm:p-10 rounded-3xl border border-slate-200/90 shadow-xl shadow-slate-200/50 animate-in fade-in zoom-in-95 duration-200">
-          
-          {/* Header */}
-          <div className="text-center">
-            <div className="h-14 w-14 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center mx-auto mb-4 shadow-xs">
-              <UserPlus className="h-7 w-7" />
+      <main className="flex-1 flex items-center justify-center py-16 px-4">
+        <div
+          style={{
+            width: '100%',
+            maxWidth: '520px',
+            background: 'var(--paper)',
+            border: '1px solid var(--line)',
+            borderRadius: '24px',
+            boxShadow: 'var(--shadow)',
+            padding: '38px 32px',
+          }}
+        >
+          {/* Header Badge & Title */}
+          <div className="text-center" style={{ marginBottom: '28px' }}>
+            <div
+              style={{
+                width: '52px',
+                height: '52px',
+                margin: '0 auto 16px',
+                display: 'grid',
+                placeItems: 'center',
+                borderRadius: '16px',
+                background: 'var(--coral-soft)',
+                color: 'var(--coral)',
+              }}
+            >
+              <Icon name="user" size={26} />
             </div>
-            <h2 className="text-2xl font-black text-slate-900 tracking-tight">
+            <span className="eyebrow" style={{ marginBottom: '10px' }}>
+              <span><Icon name="sparkle" size={13} /></span> Student Registration
+            </span>
+            <h1
+              style={{
+                margin: '8px 0 6px',
+                font: "800 28px 'Manrope', sans-serif",
+                color: 'var(--navy)',
+                letterSpacing: '-1px',
+              }}
+            >
               Create Student Account
-            </h2>
-            <p className="text-xs text-slate-500 mt-2">
-              Register with your university credentials to track reports and submit ownership claims.
+            </h1>
+            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '13px', lineHeight: '1.5' }}>
+              Register with your collegiate credentials to track reports and submit ownership claims.
             </p>
           </div>
 
           {/* Success Banner */}
           {success && (
-            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl text-xs flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+            <div
+              style={{
+                marginBottom: '20px',
+                padding: '12px 16px',
+                borderRadius: '12px',
+                background: 'var(--teal-soft)',
+                border: '1px solid var(--teal)',
+                color: 'var(--teal-dark)',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontWeight: 600,
+              }}
+            >
+              <Icon name="check" size={16} />
               <span>Account registered successfully! Redirecting to login...</span>
             </div>
           )}
 
           {/* Error Banner */}
           {error && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-2xl text-xs flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0" />
+            <div
+              style={{
+                marginBottom: '20px',
+                padding: '12px 16px',
+                borderRadius: '12px',
+                background: 'var(--coral-soft)',
+                border: '1px solid var(--coral)',
+                color: 'var(--coral-dark)',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontWeight: 600,
+              }}
+            >
+              <Icon name="x" size={16} />
               <span>{error}</span>
             </div>
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+          <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '14px' }}>
+            <div className="field" style={{ margin: 0 }}>
+              <label>
                 Full Name
+                <b>Required</b>
               </label>
-              <div className="relative">
-                <User className="h-4 w-4 text-slate-400 absolute left-3.5 top-3" />
+              <div className="input-wrap" style={{ margin: 0 }}>
+                <Icon name="user" size={17} />
                 <input
                   type="text"
                   required
                   placeholder="Maya Lin"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full text-xs font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+            <div className="form-two-col">
+              <div className="field" style={{ margin: 0 }}>
+                <label>
                   College Email
+                  <b>Required</b>
                 </label>
-                <div className="relative">
-                  <Mail className="h-4 w-4 text-slate-400 absolute left-3.5 top-3" />
+                <div className="input-wrap" style={{ margin: 0 }}>
+                  <Icon name="user" size={17} />
                   <input
                     type="email"
                     required
                     placeholder="maya@campus.edu"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full text-xs font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+              <div className="field" style={{ margin: 0 }}>
+                <label>
                   Student ID
+                  <b>Required</b>
                 </label>
-                <div className="relative">
-                  <CreditCard className="h-4 w-4 text-slate-400 absolute left-3.5 top-3" />
+                <div className="input-wrap" style={{ margin: 0 }}>
+                  <Icon name="wallet" size={17} />
                   <input
                     type="text"
                     required
                     placeholder="STU-88291"
                     value={formData.studentId}
                     onChange={(e) => setFormData({ ...formData, studentId: e.target.value })}
-                    className="w-full text-xs font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white"
                   />
                 </div>
               </div>
             </div>
 
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                Phone Number (Optional)
+            <div className="field" style={{ margin: 0 }}>
+              <label>
+                Phone Number
+                <span>Optional</span>
               </label>
-              <div className="relative">
-                <Phone className="h-4 w-4 text-slate-400 absolute left-3.5 top-3" />
+              <div className="input-wrap" style={{ margin: 0 }}>
+                <Icon name="phone" size={17} />
                 <input
                   type="tel"
                   placeholder="(555) 019-2834"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full text-xs font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+            <div className="form-two-col">
+              <div className="field" style={{ margin: 0 }}>
+                <label>
                   Password
+                  <b>Required</b>
                 </label>
-                <div className="relative">
-                  <Lock className="h-4 w-4 text-slate-400 absolute left-3.5 top-3" />
+                <div className="input-wrap" style={{ margin: 0 }}>
+                  <Icon name="key" size={17} />
                   <input
                     type="password"
                     required
                     placeholder="••••••••"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="w-full text-xs font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+              <div className="field" style={{ margin: 0 }}>
+                <label>
                   Confirm Password
+                  <b>Required</b>
                 </label>
-                <div className="relative">
-                  <Lock className="h-4 w-4 text-slate-400 absolute left-3.5 top-3" />
+                <div className="input-wrap" style={{ margin: 0 }}>
+                  <Icon name="key" size={17} />
                   <input
                     type="password"
                     required
                     placeholder="••••••••"
                     value={formData.confirmPassword}
                     onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                    className="w-full text-xs font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white"
                   />
                 </div>
               </div>
@@ -221,29 +268,44 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={loading || success}
-              className="w-full mt-2 py-3 px-4 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-95 transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className="button button-lost"
+              style={{ width: '100%', marginTop: '8px', minHeight: '48px' }}
             >
               {loading ? (
                 <span>Registering Student...</span>
               ) : (
                 <>
                   <span>Create Account</span>
-                  <ArrowRight className="h-4 w-4" />
+                  <Icon name="arrow" size={16} />
                 </>
               )}
             </button>
           </form>
 
-          {/* Login prompt */}
-          <div className="text-center pt-2 border-t border-slate-100">
-            <p className="text-xs text-slate-500">
+          {/* Login link */}
+          <div
+            style={{
+              textAlign: 'center',
+              marginTop: '22px',
+              paddingTop: '16px',
+              borderTop: '1px solid var(--line)',
+            }}
+          >
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--muted)' }}>
               Already have an account?{' '}
-              <Link href="/login" className="font-bold text-indigo-600 hover:text-indigo-700 underline">
+              <Link
+                href="/login"
+                style={{
+                  fontWeight: 700,
+                  color: 'var(--blue)',
+                  textDecoration: 'underline',
+                  marginLeft: '4px',
+                }}
+              >
                 Sign in
               </Link>
             </p>
           </div>
-
         </div>
       </main>
 

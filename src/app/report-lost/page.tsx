@@ -2,71 +2,100 @@
 
 import React, { useState, useRef } from 'react';
 import Link from 'next/link';
-import { 
-  AlertCircle, 
-  ArrowLeft, 
-  UploadCloud, 
-  X, 
-  CheckCircle2, 
-  MapPin, 
-  Calendar, 
-  Clock, 
-  Tag, 
-  ShieldCheck, 
-  Info, 
-  Image as ImageIcon,
-  Sparkles,
-  Search,
-  LayoutDashboard
-} from 'lucide-react';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
-import { CATEGORIES } from '@/lib/constants';
+import { Header } from '@/components/ui/Header';
+import { Footer } from '@/components/ui/Footer';
+import { Icon, type IconName } from '@/components/ui/Icon';
 import { CAMPUS_LOCATIONS } from '@/lib/campusLocations';
 import { submitLostItemReport } from '@/app/actions/reportLost';
 
-interface FormState {
+interface FormData {
+  type: string;
+  customItem: string;
   itemName: string;
   category: string;
   description: string;
   location: string;
-  specificLocation: string;
+  specificPlace: string;
   dateLost: string;
   timeLost: string;
   additionalDetails: string;
 }
 
-interface FormErrors {
-  itemName?: string;
-  category?: string;
-  description?: string;
-  location?: string;
-  dateLost?: string;
-  timeLost?: string;
-}
+const itemTypes: { name: string; icon: IconName }[] = [
+  { name: 'Headphones', icon: 'headphones' },
+  { name: 'Wallet', icon: 'wallet' },
+  { name: 'Bottle', icon: 'bottle' },
+  { name: 'Phone', icon: 'phone' },
+  { name: 'Bag', icon: 'bag' },
+  { name: 'Keys', icon: 'key' },
+];
+
+const quickLocations = [
+  { name: 'PCP', detail: 'Central academic block' },
+  { name: '6th Building', detail: 'Lecture halls & labs' },
+  { name: 'Hostels', detail: 'Student residences' },
+  { name: 'Architecture', detail: 'Studios & workshops' },
+];
+
+const CATEGORIES = [
+  'Electronics',
+  'IDs & Cards',
+  'Books & Notes',
+  'Keys & Access',
+  'Clothing & Accessories',
+  'Bags & Wallets',
+  'Bottles & Containers',
+  'Other',
+];
 
 export default function ReportLostPage() {
-  const [formData, setFormData] = useState<FormState>({
+  const [step, setStep] = useState(1);
+  const [form, setForm] = useState<FormData>({
+    type: 'Headphones',
+    customItem: '',
     itemName: '',
-    category: '',
+    category: 'Electronics',
     description: '',
-    location: '',
-    specificLocation: '',
-    dateLost: '',
+    location: '6th Building',
+    specificPlace: '',
+    dateLost: new Date().toISOString().split('T')[0],
     timeLost: '',
     additionalDetails: '',
   });
 
+  const [confirmed, setConfirmed] = useState(true);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [referenceId, setReferenceId] = useState('');
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const steps = ['Item', 'Details', 'Location', 'Review'];
 
-  // Handle Image Selection & Preview with strict file type and size validation
+  const update = (key: keyof FormData, value: string) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSelectType = (typeName: string) => {
+    update('type', typeName);
+    if (typeName !== 'Something else') {
+      if (!form.itemName || itemTypes.some((t) => form.itemName.toLowerCase().includes(t.name.toLowerCase()))) {
+        update('itemName', typeName);
+      }
+      if (typeName === 'Headphones' || typeName === 'Phone') {
+        update('category', 'Electronics');
+      } else if (typeName === 'Wallet' || typeName === 'Bag') {
+        update('category', 'Bags & Wallets');
+      } else if (typeName === 'Keys') {
+        update('category', 'Keys & Access');
+      } else if (typeName === 'Bottle') {
+        update('category', 'Bottles & Containers');
+      }
+    }
+  };
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -76,7 +105,6 @@ export default function ReportLostPage() {
         if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
-
       if (file.size > 5 * 1024 * 1024) {
         alert('Image file size exceeds 5MB limit. Please upload a smaller file.');
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -93,601 +121,647 @@ export default function ReportLostPage() {
   };
 
   const handleRemoveImage = () => {
-    if (imagePreview) {
-      URL.revokeObjectURL(imagePreview);
-    }
     setImageFile(null);
     setImagePreview(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // Form Validation
-  const validateForm = (): boolean => {
-    const newErrors: FormErrors = {};
+  const selectedName = form.type === 'Something else' ? (form.customItem || 'Item') : form.type;
 
-    if (!formData.itemName.trim()) {
-      newErrors.itemName = 'Item name is required.';
-    }
-    if (!formData.category) {
-      newErrors.category = 'Please select an item category.';
-    }
-    if (!formData.description.trim()) {
-      newErrors.description = 'Please provide a clear description of the item.';
-    } else if (formData.description.trim().length < 10) {
-      newErrors.description = 'Description should be at least 10 characters.';
-    }
-    if (!formData.location) {
-      newErrors.location = 'Please select the campus building or area where it was lost.';
-    }
-    if (!formData.dateLost) {
-      newErrors.dateLost = 'Date lost is required.';
-    }
-    if (!formData.timeLost) {
-      newErrors.timeLost = 'Approximate time lost is required.';
-    }
+  const nextDisabled =
+    (step === 1 &&
+      (!form.type || (form.type === 'Something else' && !form.customItem.trim()))) ||
+    (step === 2 &&
+      (!form.itemName.trim() ||
+        form.itemName.trim().length < 2 ||
+        !form.description.trim() ||
+        form.description.trim().length < 10)) ||
+    (step === 3 && (!form.location || !form.dateLost)) ||
+    (step === 4 && (!confirmed || isSubmitting));
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) {
-      // Scroll to the first error
-      const firstError = document.querySelector('[data-has-error="true"]');
-      if (firstError) {
-        firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-      return;
-    }
-
+  const handleSubmit = async () => {
     setIsSubmitting(true);
+    setSubmitError(null);
 
     try {
+      const finalName = form.itemName.trim() || (form.type === 'Something else' ? form.customItem.trim() : form.type);
       const result = await submitLostItemReport({
-        itemName: formData.itemName,
-        category: formData.category,
-        description: formData.description,
-        location: formData.location,
-        specificLocation: formData.specificLocation,
-        dateLost: formData.dateLost,
-        timeLost: formData.timeLost,
-        additionalDetails: formData.additionalDetails,
+        itemName: finalName,
+        category: form.category,
+        description: form.description.trim(),
+        location: form.location,
+        specificLocation: form.specificPlace.trim(),
+        dateLost: form.dateLost,
+        timeLost: form.timeLost.trim(),
+        additionalDetails: form.additionalDetails.trim(),
         image: imagePreview,
       });
 
       if (result.success && result.item) {
         setReferenceId(result.item.id);
-        setIsSubmitted(true);
+        setSubmitted(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
-        alert(result.error || 'Failed to submit report. Please check the fields.');
+        setSubmitError(result.error || 'Failed to submit report. Please check your fields and sign in.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('An unexpected error occurred. Please try again.');
+      setSubmitError(err?.message || 'An unexpected error occurred. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleReset = () => {
-    setFormData({
+    setForm({
+      type: 'Headphones',
+      customItem: '',
       itemName: '',
-      category: '',
+      category: 'Electronics',
       description: '',
-      location: '',
-      specificLocation: '',
-      dateLost: '',
+      location: '6th Building',
+      specificPlace: '',
+      dateLost: new Date().toISOString().split('T')[0],
       timeLost: '',
       additionalDetails: '',
     });
     handleRemoveImage();
-    setErrors({});
-    setIsSubmitted(false);
+    setStep(1);
+    setSubmitted(false);
     setReferenceId('');
+    setSubmitError(null);
   };
 
+  const activeIcon = itemTypes.find((item) => item.name === form.type)?.icon || 'sparkle';
+
+  const formattedRef = referenceId
+    ? (referenceId.startsWith('CF-') ? referenceId : `CF-L-${referenceId.slice(-4).toUpperCase()}`)
+    : 'CF-L-2048';
+
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
-      <Navbar />
+    <div className="app">
+      <Header />
 
-      <main className="flex-1 py-10 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto w-full">
-        
-        {/* Breadcrumb Navigation */}
-        <nav className="flex items-center gap-2 text-xs text-slate-500 mb-6">
-          <Link href="/" className="hover:text-indigo-600 transition-colors">
-            Home
-          </Link>
-          <span>/</span>
-          <Link href="/dashboard" className="hover:text-indigo-600 transition-colors">
-            Student Dashboard
-          </Link>
-          <span>/</span>
-          <span className="text-slate-900 font-semibold">Report Lost Item</span>
-        </nav>
-
-        {isSubmitted ? (
-          /* SUCCESS SCREEN */
-          <div className="bg-white rounded-3xl border border-slate-200/90 p-8 sm:p-12 shadow-xl shadow-slate-200/50 text-center animate-in zoom-in-95 duration-200 max-w-2xl mx-auto">
-            <div className="h-20 w-20 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-6 shadow-inner">
-              <CheckCircle2 className="h-11 w-11" />
+      {submitted ? (
+        <main className="report-layout lost">
+          <section className="success-state">
+            <div className="success-art">
+              <span className="success-ring ring-one" />
+              <span className="success-ring ring-two" />
+              <div className="success-icon">
+                <Icon name="check" size={42} />
+              </div>
+              <div className="success-card mini-a">
+                <Icon name="sparkle" size={17} /> Report verified
+              </div>
+              <div className="success-card mini-b">
+                <Icon name="shield" size={17} /> Campus Safety
+              </div>
             </div>
-
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 mb-3">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Report Registered with Campus Security
-            </span>
-
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              Lost Item Report Logged!
-            </h1>
-
-            <p className="text-slate-600 text-sm mt-3 leading-relaxed max-w-lg mx-auto">
-              Your lost item report has been indexed into the college central safety registry. If a matching item is turned in to security, you will receive an instant notification.
+            <span className="section-kicker">Report received</span>
+            <h1>Lost report submitted</h1>
+            <p>
+              We’ll notify you as soon as a potential match is found by campus security or fellow students.
             </p>
-
-            {/* Reference Tracking Card */}
-            <div className="mt-6 p-4 bg-slate-50 rounded-2xl border border-slate-200 max-w-md mx-auto text-left">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-                <span className="text-xs text-slate-500 font-medium">Tracking Reference Number</span>
-                <span className="text-sm font-mono font-bold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-lg border border-indigo-200">
-                  {referenceId}
-                </span>
-              </div>
-
-              <div className="pt-3 space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Item:</span>
-                  <span className="font-semibold text-slate-800">{formData.itemName}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Category:</span>
-                  <span className="font-medium text-slate-700">{formData.category}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Campus Location:</span>
-                  <span className="font-medium text-slate-700">{formData.location}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Date &amp; Time:</span>
-                  <span className="font-medium text-slate-700">{formData.dateLost} at {formData.timeLost}</span>
-                </div>
-                {imagePreview && (
-                  <div className="pt-2 flex items-center gap-3">
-                    <span className="text-slate-500">Photo Attached:</span>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img 
-                      src={imagePreview} 
-                      alt="Uploaded item" 
-                      className="h-10 w-10 object-cover rounded-lg border border-slate-200" 
-                    />
-                  </div>
-                )}
-              </div>
+            <div className="success-reference">
+              Tracking Reference <strong>{formattedRef}</strong>
             </div>
-
-            {/* Navigation Actions */}
-            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-              <Link
-                href="/dashboard"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 active:scale-95 transition-all"
-              >
-                <LayoutDashboard className="h-4 w-4" />
-                View in Student Dashboard
+            <div className="success-actions">
+              <Link href="/dashboard" className="button button-lost">
+                View My Reports <Icon name="arrow" size={17} />
               </Link>
-              <Link
-                href="/#browse"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 transition-all"
-              >
-                <Search className="h-4 w-4 text-indigo-500" />
-                Browse Found Registry
-              </Link>
-              <button
-                type="button"
-                onClick={handleReset}
-                className="w-full sm:w-auto px-4 py-3 text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors"
-              >
-                Report Another Item
+              <button className="button button-quiet" onClick={handleReset}>
+                Report another item
               </button>
+              <Link href="/" className="button button-quiet">
+                Back to home
+              </Link>
             </div>
-          </div>
-        ) : (
-          /* REPORT FORM */
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            {/* Main Form (2 cols) */}
-            <div className="lg:col-span-2">
-              <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-8 shadow-xs">
-                
-                {/* Header */}
-                <div className="flex items-center gap-3 mb-6 pb-6 border-b border-slate-100">
-                  <div className="h-12 w-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100">
-                    <AlertCircle className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-                      Report a Lost Belonging
-                    </h1>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Submit precise details to help campus security and fellow students identify your item.
-                    </p>
-                  </div>
-                </div>
+          </section>
+        </main>
+      ) : (
+        <main className="report-layout lost">
+          <aside className="report-aside">
+            <Link href="/" className="back-link">
+              <Icon name="arrow" size={18} /> Back to home
+            </Link>
+            <span className="report-tag">Lost item report</span>
+            <h1>Help us find your item.</h1>
+            <p>
+              The more detail you share, the stronger your potential matches will be across the campus safety registry.
+            </p>
+            <div className="aside-illustration">
+              <div className="aside-building">
+                <Icon name="building" size={56} />
+              </div>
+              <span className="path-dot p1" />
+              <span className="path-dot p2" />
+              <span className="path-dot p3" />
+              <div className="aside-item">
+                <Icon name="headphones" size={36} />
+              </div>
+            </div>
+            <div className="privacy-note">
+              <Icon name="shield" size={18} />
+              <span>
+                <strong>Your report is protected</strong>
+                <small>Only verified staff and security can view private details.</small>
+              </span>
+            </div>
+          </aside>
 
-                <form onSubmit={handleSubmit} noValidate className="space-y-6">
-                  
-                  {/* 1. Item Name */}
-                  <div data-has-error={!!errors.itemName}>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      Item Name <span className="text-rose-500">*</span>
+          <section className="report-main">
+            <div className="progress-wrap">
+              <div className="progress-label">
+                <span>Report progress</span>
+                <strong>{step} of 4</strong>
+              </div>
+              <div className="progress-steps">
+                {steps.map((label, index) => (
+                  <button
+                    key={label}
+                    type="button"
+                    className={`${step === index + 1 ? 'active' : ''} ${
+                      step > index + 1 ? 'complete' : ''
+                    }`}
+                    onClick={() => index + 1 < step && setStep(index + 1)}
+                  >
+                    <i>
+                      {step > index + 1 ? (
+                        <Icon name="check" size={14} />
+                      ) : (
+                        `0${index + 1}`
+                      )}
+                    </i>
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="form-panel">
+              {submitError && (
+                <div
+                  style={{
+                    padding: '14px 18px',
+                    marginBottom: '24px',
+                    borderRadius: '12px',
+                    background: '#fbeae8',
+                    border: '1px solid #f2b8b5',
+                    color: '#9c2f2f',
+                    fontSize: '13px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                  }}
+                >
+                  <Icon name="sparkle" size={18} />
+                  <span>{submitError}</span>
+                </div>
+              )}
+
+              {/* Step 1: Item Type */}
+              {step === 1 && (
+                <div className="form-step">
+                  <span className="form-kicker">Step 01</span>
+                  <h2>What did you lose?</h2>
+                  <p>Choose the closest item type. You can add specific model and color details next.</p>
+                  <div className="item-grid">
+                    {itemTypes.map((item) => (
+                      <button
+                        key={item.name}
+                        type="button"
+                        className={
+                          form.type === item.name
+                            ? 'item-option selected'
+                            : 'item-option'
+                        }
+                        onClick={() => handleSelectType(item.name)}
+                      >
+                        <span>
+                          <Icon name={item.icon} size={29} />
+                        </span>
+                        <strong>{item.name}</strong>
+                        {form.type === item.name && (
+                          <i>
+                            <Icon name="check" size={13} />
+                          </i>
+                        )}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      className={
+                        form.type === 'Something else'
+                          ? 'item-option custom selected'
+                          : 'item-option custom'
+                      }
+                      onClick={() => handleSelectType('Something else')}
+                    >
+                      <span className="ellipsis">•••</span>
+                      <strong>Something else</strong>
+                      {form.type === 'Something else' && (
+                        <i>
+                          <Icon name="check" size={13} />
+                        </i>
+                      )}
+                    </button>
+                  </div>
+                  {form.type === 'Something else' && (
+                    <div className="custom-reveal">
+                      <label htmlFor="custom-item">What did you lose?</label>
+                      <div className="input-wrap">
+                        <Icon name="sparkle" size={18} />
+                        <input
+                          id="custom-item"
+                          autoFocus
+                          value={form.customItem}
+                          onChange={(e) => {
+                            update('customItem', e.target.value);
+                            update('itemName', e.target.value);
+                          }}
+                          placeholder="e.g. Scientific calculator, Umbrella, Jacket..."
+                        />
+                      </div>
+                      <small>
+                        Anything is welcome — unusual items are often the easiest to match!
+                      </small>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Step 2: Details */}
+              {step === 2 && (
+                <div className="form-step">
+                  <span className="form-kicker">Step 02</span>
+                  <h2>Tell us the useful details.</h2>
+                  <p>
+                    Distinctive information helps us separate your item from similar reports.
+                  </p>
+                  <div className="field">
+                    <label htmlFor="item-name">
+                      Item name <b>Required</b>
                     </label>
                     <input
-                      type="text"
-                      placeholder="e.g. Apple AirPods Pro 2nd Gen, MacBook Pro, Student ID Card"
-                      value={formData.itemName}
-                      onChange={(e) => {
-                        setFormData({ ...formData, itemName: e.target.value });
-                        if (errors.itemName) setErrors({ ...errors, itemName: undefined });
-                      }}
-                      className={`w-full text-xs px-3.5 py-2.5 rounded-xl border bg-slate-50/50 transition-colors focus:bg-white focus:outline-none ${
-                        errors.itemName
-                          ? 'border-rose-400 bg-rose-50/30 focus:border-rose-500 text-rose-900'
-                          : 'border-slate-200 focus:border-indigo-500'
-                      }`}
+                      id="item-name"
+                      value={form.itemName}
+                      onChange={(e) => update('itemName', e.target.value)}
+                      placeholder={
+                        form.type === 'Headphones'
+                          ? 'e.g. Black Sony WH-1000XM5 headphones'
+                          : `Describe the ${selectedName.toLowerCase()}`
+                      }
                     />
-                    {errors.itemName && (
-                      <p className="text-[11px] font-medium text-rose-600 mt-1 flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {errors.itemName}
-                      </p>
-                    )}
                   </div>
 
-                  {/* 2. Category */}
-                  <div data-has-error={!!errors.category}>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      Category <span className="text-rose-500">*</span>
-                    </label>
-                    <div className="relative">
+                  <div className="field">
+                    <label htmlFor="category">Category <b>Required</b></label>
+                    <div className="select-wrap">
                       <select
-                        value={formData.category}
-                        onChange={(e) => {
-                          setFormData({ ...formData, category: e.target.value });
-                          if (errors.category) setErrors({ ...errors, category: undefined });
-                        }}
-                        className={`w-full text-xs px-3.5 py-2.5 rounded-xl border bg-slate-50/50 transition-colors focus:bg-white focus:outline-none cursor-pointer ${
-                          errors.category
-                            ? 'border-rose-400 bg-rose-50/30 focus:border-rose-500'
-                            : 'border-slate-200 focus:border-indigo-500'
-                        }`}
+                        id="category"
+                        value={form.category}
+                        onChange={(e) => update('category', e.target.value)}
                       >
-                        <option value="">-- Select Item Category --</option>
-                        {CATEGORIES.map((cat) => (
-                          <option key={cat} value={cat}>
-                            {cat}
+                        {CATEGORIES.map((category) => (
+                          <option key={category} value={category}>
+                            {category}
                           </option>
                         ))}
                       </select>
+                      <Icon name="chevron" size={17} />
                     </div>
-                    {errors.category && (
-                      <p className="text-[11px] font-medium text-rose-600 mt-1 flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {errors.category}
-                      </p>
-                    )}
                   </div>
 
-                  {/* 3. Description */}
-                  <div data-has-error={!!errors.description}>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      Description <span className="text-rose-500">*</span>
+                  <div className="field">
+                    <label htmlFor="description">
+                      Description <b>Required (min 10 characters)</b>
                     </label>
                     <textarea
-                      rows={3}
-                      placeholder="Describe color, brand, model, case, visible wear, contents, or distinguishing features..."
-                      value={formData.description}
-                      onChange={(e) => {
-                        setFormData({ ...formData, description: e.target.value });
-                        if (errors.description) setErrors({ ...errors, description: undefined });
-                      }}
-                      className={`w-full text-xs px-3.5 py-2.5 rounded-xl border bg-slate-50/50 transition-colors focus:bg-white focus:outline-none ${
-                        errors.description
-                          ? 'border-rose-400 bg-rose-50/30 focus:border-rose-500 text-rose-900'
-                          : 'border-slate-200 focus:border-indigo-500'
-                      }`}
+                      id="description"
+                      value={form.description}
+                      onChange={(e) => update('description', e.target.value)}
+                      placeholder="Color, brand, scratches, stickers, contents, case color, or any distinctive marks…"
+                      rows={4}
                     />
-                    {errors.description && (
-                      <p className="text-[11px] font-medium text-rose-600 mt-1 flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {errors.description}
-                      </p>
-                    )}
+                    <small>
+                      Do not include private lock screen passwords or PINs.
+                    </small>
                   </div>
 
-                  {/* 4. Photo Upload with Live Preview */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      Photo Upload (Optional but Recommended)
+                  <div className="field">
+                    <label htmlFor="photo">
+                      Photo Upload <span>Optional</span>
                     </label>
-
                     {imagePreview ? (
-                      /* Image Preview Box */
-                      <div className="relative border border-indigo-200 bg-indigo-50/30 rounded-2xl p-4 flex items-center gap-4">
-                        <div className="relative h-20 w-20 rounded-xl overflow-hidden border border-slate-200 shrink-0 bg-white">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={imagePreview}
-                            alt="Uploaded item preview"
-                            className="h-full w-full object-cover"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0 text-xs">
-                          <p className="font-semibold text-slate-800 truncate">
-                            {imageFile?.name}
-                          </p>
-                          <p className="text-slate-500 text-[11px] mt-0.5">
-                            {imageFile ? (imageFile.size / 1024).toFixed(1) + ' KB' : ''} • Image loaded
-                          </p>
-                          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded-md mt-1">
-                            <CheckCircle2 className="h-3 w-3" /> Ready for matching
-                          </span>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '14px',
+                          padding: '12px',
+                          borderRadius: '12px',
+                          border: '1px solid var(--line)',
+                          background: 'var(--paper)',
+                        }}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={imagePreview}
+                          alt="Uploaded lost item"
+                          style={{
+                            width: '56px',
+                            height: '56px',
+                            borderRadius: '10px',
+                            objectFit: 'cover',
+                            border: '1px solid var(--line)',
+                          }}
+                        />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <strong style={{ fontSize: '12px', color: 'var(--navy)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                            {imageFile?.name || 'Item photo attached'}
+                          </strong>
+                          <small style={{ color: 'var(--muted)', fontSize: '10px' }}>
+                            {imageFile ? `${(imageFile.size / 1024).toFixed(1)} KB` : 'Ready for matching'}
+                          </small>
                         </div>
                         <button
                           type="button"
                           onClick={handleRemoveImage}
-                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0"
-                          title="Remove image"
+                          className="button button-quiet"
+                          style={{ minHeight: '36px', padding: '0 12px', fontSize: '11px' }}
                         >
-                          <X className="h-5 w-5" />
+                          Remove
                         </button>
                       </div>
                     ) : (
-                      /* Upload Dropzone */
                       <div
                         onClick={() => fileInputRef.current?.click()}
-                        className="border-2 border-dashed border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/20 rounded-2xl p-6 text-center transition-colors cursor-pointer group"
+                        style={{
+                          border: '2px dashed var(--line)',
+                          borderRadius: '12px',
+                          padding: '24px 16px',
+                          textAlign: 'center',
+                          cursor: 'pointer',
+                          background: 'rgba(246, 237, 223, 0.4)',
+                        }}
                       >
                         <input
                           type="file"
                           ref={fileInputRef}
                           onChange={handleImageChange}
                           accept="image/png, image/jpeg, image/webp"
-                          className="hidden"
+                          style={{ display: 'none' }}
                         />
-                        <div className="h-10 w-10 rounded-xl bg-slate-100 group-hover:bg-indigo-100 text-slate-500 group-hover:text-indigo-600 flex items-center justify-center mx-auto mb-2 transition-colors">
-                          <UploadCloud className="h-5 w-5" />
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                          <Icon name="sparkle" size={24} />
+                          <strong style={{ fontSize: '12px', color: 'var(--navy)' }}>
+                            Click to attach a photo
+                          </strong>
+                          <small style={{ fontSize: '10px', color: 'var(--muted)' }}>
+                            PNG, JPG, or WEBP up to 5MB
+                          </small>
                         </div>
-                        <p className="text-xs font-semibold text-slate-800 group-hover:text-indigo-600 transition-colors">
-                          Click or drag image to upload
-                        </p>
-                        <p className="text-[11px] text-slate-400 mt-1">
-                          PNG, JPG, or WEBP up to 5MB
-                        </p>
                       </div>
                     )}
                   </div>
+                </div>
+              )}
 
-                  {/* 5. Location Lost */}
-                  <div data-has-error={!!errors.location}>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      Campus Location Lost <span className="text-rose-500">*</span>
+              {/* Step 3: Location */}
+              {step === 3 && (
+                <div className="form-step">
+                  <span className="form-kicker">Step 03</span>
+                  <h2>Where and when did you last have it?</h2>
+                  <p>Choose a campus zone first, then add a room or nearby landmark.</p>
+                  
+                  <fieldset className="location-options">
+                    <legend>
+                      Quick Campus Locations <b>Select One</b>
+                    </legend>
+                    {quickLocations.map((location) => (
+                      <button
+                        key={location.name}
+                        type="button"
+                        className={form.location === location.name ? 'selected' : ''}
+                        onClick={() => update('location', location.name)}
+                      >
+                        <span>
+                          <Icon name="building" size={22} />
+                        </span>
+                        <div>
+                          <strong>{location.name}</strong>
+                          <small>{location.detail}</small>
+                        </div>
+                        {form.location === location.name && (
+                          <i>
+                            <Icon name="check" size={13} />
+                          </i>
+                        )}
+                      </button>
+                    ))}
+                  </fieldset>
+
+                  <div className="field">
+                    <label htmlFor="all-locations">
+                      Full Campus Building / Area <b>Required</b>
                     </label>
-                    <select
-                      value={formData.location}
-                      onChange={(e) => {
-                        setFormData({ ...formData, location: e.target.value });
-                        if (errors.location) setErrors({ ...errors, location: undefined });
-                      }}
-                      className={`w-full text-xs px-3.5 py-2.5 rounded-xl border bg-slate-50/50 transition-colors focus:bg-white focus:outline-none cursor-pointer ${
-                        errors.location
-                          ? 'border-rose-400 bg-rose-50/30 focus:border-rose-500'
-                          : 'border-slate-200 focus:border-indigo-500'
-                      }`}
-                    >
-                      <option value="">-- Select Campus Building / Area --</option>
-                      {CAMPUS_LOCATIONS.filter((l) => l !== 'All Locations').map((loc) => (
-                        <option key={loc} value={loc}>
-                          {loc}
-                        </option>
-                      ))}
-                    </select>
-                    {errors.location && (
-                      <p className="text-[11px] font-medium text-rose-600 mt-1 flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {errors.location}
-                      </p>
-                    )}
-
-                    {/* Specific room or area within building */}
-                    <input
-                      type="text"
-                      placeholder="Specific room, floor, or desk (e.g. Room 204, 6th Building)"
-                      value={formData.specificLocation}
-                      onChange={(e) => setFormData({ ...formData, specificLocation: e.target.value })}
-                      className="mt-2 w-full text-xs px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50/30 focus:bg-white focus:outline-none focus:border-indigo-500"
-                    />
+                    <div className="select-wrap">
+                      <select
+                        id="all-locations"
+                        value={form.location}
+                        onChange={(e) => update('location', e.target.value)}
+                      >
+                        <option value="">-- Select Campus Building / Zone --</option>
+                        {CAMPUS_LOCATIONS.filter((l) => l !== 'All Locations').map((loc) => (
+                          <option key={loc} value={loc}>
+                            {loc}
+                          </option>
+                        ))}
+                      </select>
+                      <Icon name="chevron" size={17} />
+                    </div>
                   </div>
 
-                  {/* 6. Date Lost & 7. Time Lost */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div data-has-error={!!errors.dateLost}>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                        Date Lost <span className="text-rose-500">*</span>
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="date"
-                          max={new Date().toISOString().split('T')[0]}
-                          value={formData.dateLost}
-                          onChange={(e) => {
-                            setFormData({ ...formData, dateLost: e.target.value });
-                            if (errors.dateLost) setErrors({ ...errors, dateLost: undefined });
-                          }}
-                          className={`w-full text-xs px-3.5 py-2.5 rounded-xl border bg-slate-50/50 transition-colors focus:bg-white focus:outline-none ${
-                            errors.dateLost
-                              ? 'border-rose-400 bg-rose-50/30 focus:border-rose-500 text-rose-900'
-                              : 'border-slate-200 focus:border-indigo-500'
-                          }`}
-                        />
-                      </div>
-                      {errors.dateLost && (
-                        <p className="text-[11px] font-medium text-rose-600 mt-1 flex items-center gap-1">
-                          <AlertCircle className="h-3 w-3" />
-                          {errors.dateLost}
-                        </p>
-                      )}
-                    </div>
-
-                    <div data-has-error={!!errors.timeLost}>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                        Approximate Time Lost <span className="text-rose-500">*</span>
+                  <div className="form-two-col">
+                    <div className="field">
+                      <label htmlFor="specific">
+                        Specific place <span>Optional</span>
                       </label>
                       <input
-                        type="text"
-                        placeholder="e.g. 10:30 AM or between 2:00-3:30 PM"
-                        value={formData.timeLost}
-                        onChange={(e) => {
-                          setFormData({ ...formData, timeLost: e.target.value });
-                          if (errors.timeLost) setErrors({ ...errors, timeLost: undefined });
-                        }}
-                        className={`w-full text-xs px-3.5 py-2.5 rounded-xl border bg-slate-50/50 transition-colors focus:bg-white focus:outline-none ${
-                          errors.timeLost
-                            ? 'border-rose-400 bg-rose-50/30 focus:border-rose-500 text-rose-900'
-                            : 'border-slate-200 focus:border-indigo-500'
-                        }`}
+                        id="specific"
+                        value={form.specificPlace}
+                        onChange={(e) => update('specificPlace', e.target.value)}
+                        placeholder="e.g. Room 204, 2nd Floor bench"
                       />
-                      {errors.timeLost && (
-                        <p className="text-[11px] font-medium text-rose-600 mt-1 flex items-center gap-1">
-                          <AlertCircle className="h-3 w-3" />
-                          {errors.timeLost}
-                        </p>
-                      )}
                     </div>
-                  </div>
-
-                  {/* 8. Additional Identifying Details (Verification proof) */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="block text-xs font-bold text-slate-700">
-                        Additional Identifying Details (Confidential)
+                    <div className="field">
+                      <label htmlFor="date">
+                        Date Lost <b>Required</b>
                       </label>
-                      <span className="text-[10px] text-indigo-600 font-semibold bg-indigo-50 px-2 py-0.5 rounded-md">
-                        Security Only
-                      </span>
+                      <input
+                        id="date"
+                        type="date"
+                        max={new Date().toISOString().split('T')[0]}
+                        value={form.dateLost}
+                        onChange={(e) => update('dateLost', e.target.value)}
+                      />
                     </div>
-                    <textarea
-                      rows={2}
-                      placeholder="Secret identifying marks kept confidential from public view (e.g. lock screen photo, serial number, internal stickers, personal engraved initials)..."
-                      value={formData.additionalDetails}
-                      onChange={(e) => setFormData({ ...formData, additionalDetails: e.target.value })}
-                      className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:outline-none focus:border-indigo-500"
+                  </div>
+
+                  <div className="field">
+                    <label htmlFor="time">
+                      Approximate Time <span>Optional</span>
+                    </label>
+                    <input
+                      id="time"
+                      value={form.timeLost}
+                      onChange={(e) => update('timeLost', e.target.value)}
+                      placeholder="e.g. 10:30 AM or between 2:00 - 3:30 PM"
                     />
-                    <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
-                      <Info className="h-3 w-3 shrink-0" />
-                      This information is hidden from the public and only seen by Security Officers during claim reviews.
-                    </p>
                   </div>
 
-                  {/* Submit Button */}
-                  <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
-                    <Link
-                      href="/"
-                      className="px-5 py-3 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
-                    >
-                      Cancel
-                    </Link>
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="inline-flex items-center justify-center gap-2 px-8 py-3 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/25 active:scale-95 disabled:opacity-70 transition-all cursor-pointer"
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <div className="h-4 w-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                          <span>Submitting Report...</span>
-                        </>
-                      ) : (
-                        <>
-                          <AlertCircle className="h-4 w-4" />
-                          <span>Submit Lost Report</span>
-                        </>
+                  <div className="field">
+                    <label htmlFor="confidential-details">
+                      Confidential Identification Markings <span>Security Only</span>
+                    </label>
+                    <input
+                      id="confidential-details"
+                      value={form.additionalDetails}
+                      onChange={(e) => update('additionalDetails', e.target.value)}
+                      placeholder="e.g. Lock screen wallpaper, custom initials engraved, serial number..."
+                    />
+                    <small>
+                      This info is hidden from the public registry and only verified by Security during claims.
+                    </small>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 4: Review */}
+              {step === 4 && (
+                <div className="form-step">
+                  <span className="form-kicker">Step 04</span>
+                  <h2>Review your report.</h2>
+                  <p>
+                    Make sure everything looks right. You can go back to update any section.
+                  </p>
+                  <div className="review-card">
+                    <div className="review-head">
+                      <span>
+                        <Icon name={activeIcon} size={28} />
+                      </span>
+                      <div>
+                        <small>Lost item</small>
+                        <h3>{form.itemName || selectedName}</h3>
+                      </div>
+                      <button type="button" onClick={() => setStep(2)}>
+                        Edit
+                      </button>
+                    </div>
+                    <dl>
+                      <div>
+                        <dt>Category</dt>
+                        <dd>{form.category}</dd>
+                      </div>
+                      <div>
+                        <dt>Location</dt>
+                        <dd>
+                          {form.location}
+                          {form.specificPlace ? ` · ${form.specificPlace}` : ''}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Date &amp; Time</dt>
+                        <dd>
+                          {form.dateLost}
+                          {form.timeLost ? ` at ${form.timeLost}` : ''}
+                        </dd>
+                      </div>
+                      <div className="full">
+                        <dt>Description</dt>
+                        <dd>{form.description}</dd>
+                      </div>
+                      {imagePreview && (
+                        <div className="full">
+                          <dt>Attached Photo</dt>
+                          <dd style={{ marginTop: '6px' }}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={imagePreview}
+                              alt="Attached item preview"
+                              style={{ width: '70px', height: '70px', borderRadius: '10px', objectFit: 'cover' }}
+                            />
+                          </dd>
+                        </div>
                       )}
-                    </button>
+                    </dl>
                   </div>
 
-                </form>
+                  <label className="confirm-check" onClick={() => setConfirmed(!confirmed)}>
+                    <input
+                      type="checkbox"
+                      checked={confirmed}
+                      onChange={(e) => setConfirmed(e.target.checked)}
+                    />
+                    <span>
+                      {confirmed && <Icon name="check" size={13} />}
+                    </span>
+                    <p>
+                      I confirm this information is accurate to the best of my knowledge.
+                    </p>
+                  </label>
 
+                  <div className="submit-note">
+                    <Icon name="bell" size={18} />
+                    <span>
+                      We’ll notify you when a matching found report appears.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Form Navigation Actions */}
+              <div className="form-actions">
+                {step > 1 ? (
+                  <button
+                    type="button"
+                    className="button button-quiet"
+                    onClick={() => setStep(step - 1)}
+                    disabled={isSubmitting}
+                  >
+                    Back
+                  </button>
+                ) : (
+                  <span />
+                )}
+                <button
+                  type="button"
+                  className="button button-lost"
+                  disabled={nextDisabled}
+                  onClick={() => (step < 4 ? setStep(step + 1) : handleSubmit())}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <span>Submitting Report...</span>
+                    </>
+                  ) : step < 4 ? (
+                    <>
+                      <span>Continue</span>
+                      <Icon name="arrow" size={18} />
+                    </>
+                  ) : (
+                    <>
+                      <span>Submit Lost Report</span>
+                      <Icon name="arrow" size={18} />
+                    </>
+                  )}
+                </button>
               </div>
             </div>
-
-            {/* Sidebar Safety Tips & Guidance (1 col) */}
-            <div className="space-y-6">
-              
-              {/* Card 1: What happens next */}
-              <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs">
-                <div className="flex items-center gap-2 text-indigo-600 font-bold text-xs mb-3">
-                  <Sparkles className="h-4 w-4" />
-                  What Happens Next?
-                </div>
-                <ul className="space-y-3 text-xs text-slate-600">
-                  <li className="flex items-start gap-2">
-                    <span className="h-5 w-5 rounded-full bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
-                      1
-                    </span>
-                    <span>Your report is logged under campus tracking with an instant reference ID.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="h-5 w-5 rounded-full bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
-                      2
-                    </span>
-                    <span>CampusFind automatically scans newly registered found items across campus.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="h-5 w-5 rounded-full bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
-                      3
-                    </span>
-                    <span>If a match occurs, you&apos;ll be notified to claim it from the designated Campus Security Desk.</span>
-                  </li>
-                </ul>
-              </div>
-
-              {/* Card 2: Campus Security Office Info */}
-              <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs mb-3">
-                  <ShieldCheck className="h-4 w-4" />
-                  Campus Safety Headquarters
-                </div>
-                <p className="text-xs text-slate-300 leading-relaxed mb-3">
-                  If you lost an item with high sensitivity (Passport, official IDs, keys with address tags), please visit security immediately.
-                </p>
-                <div className="text-xs space-y-1.5 text-slate-400 border-t border-slate-700/60 pt-3">
-                  <p><span className="text-white font-medium">Location:</span> Admin Bldg 4, Room 102</p>
-                  <p><span className="text-white font-medium">Desk Hours:</span> 7:00 AM – 9:00 PM</p>
-                  <p><span className="text-white font-medium">Emergency Line:</span> (555) 019-2834</p>
-                </div>
-              </div>
-
-              {/* Card 3: Tips for better recovery */}
-              <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-5 text-amber-900">
-                <div className="flex items-center gap-2 font-bold text-xs mb-2 text-amber-800">
-                  <Info className="h-4 w-4" />
-                  Tips for Better Recovery
-                </div>
-                <p className="text-xs leading-relaxed text-amber-800/90">
-                  Attaching photos and secret identifying details (like custom engravings or wallpaper) drastically speeds up security verification and prevents false claims.
-                </p>
-              </div>
-
-            </div>
-
-          </div>
-        )}
-
-      </main>
+          </section>
+        </main>
+      )}
 
       <Footer />
     </div>

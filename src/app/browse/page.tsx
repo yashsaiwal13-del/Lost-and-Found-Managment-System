@@ -9,34 +9,39 @@ import {
   Calendar, 
   Tag, 
   ShieldCheck, 
-  Filter, 
   X, 
-  ArrowUpRight, 
   CheckCircle2, 
-  Clock, 
   Building2, 
-  SlidersHorizontal, 
-  ChevronDown, 
-  Info, 
   Sparkles, 
-  ArrowUpDown,
-  Loader2,
   Trash2,
   AlertTriangle,
   Eye,
   Shield,
   RefreshCw,
   User,
-  ExternalLink
+  ArrowRight
 } from 'lucide-react';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
-import { CampusItem, Category } from '@/types';
+import { Header } from '@/components/ui/Header';
+import { Footer } from '@/components/ui/Footer';
+import { Icon, type IconName } from '@/components/ui/Icon';
+import { CampusItem } from '@/types';
 import { CATEGORIES } from '@/lib/constants';
 import { CAMPUS_LOCATIONS } from '@/lib/campusLocations';
 import { getFoundItemsFromDatabase } from '@/app/actions/getFoundItems';
 import { getCurrentUser } from '@/app/actions/auth';
 import { archiveReport } from '@/app/actions/moderation';
+
+function getItemIcon(category: string, name: string): IconName {
+  const lower = `${name} ${category}`.toLowerCase();
+  if (lower.includes('headphone') || lower.includes('airpod') || lower.includes('audio') || lower.includes('earbud')) return 'headphones';
+  if (lower.includes('wallet') || lower.includes('purse') || lower.includes('card')) return 'wallet';
+  if (lower.includes('bottle') || lower.includes('flask') || lower.includes('mug')) return 'bottle';
+  if (lower.includes('phone') || lower.includes('iphone') || lower.includes('mobile')) return 'phone';
+  if (lower.includes('bag') || lower.includes('backpack') || lower.includes('tote')) return 'bag';
+  if (lower.includes('key')) return 'key';
+  if (lower.includes('laptop') || lower.includes('macbook')) return 'laptop';
+  return 'sparkle';
+}
 
 export default function BrowseFoundPage() {
   const router = useRouter();
@@ -49,7 +54,6 @@ export default function BrowseFoundPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedLocation, setSelectedLocation] = useState<string>('All Locations');
-  const [selectedDateFilter, setSelectedDateFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title'>('newest');
 
   // Modal States
@@ -112,7 +116,7 @@ export default function BrowseFoundPage() {
     }
   }, [authChecking]);
 
-  // Dynamic locations from campus defaults plus custom database locations
+  // Dynamic locations
   const locationOptions = useMemo(() => {
     const list = [...CAMPUS_LOCATIONS];
     foundItems.forEach((item) => {
@@ -127,7 +131,6 @@ export default function BrowseFoundPage() {
   const filteredItems = useMemo(() => {
     return foundItems
       .filter((item) => {
-        // 1. Search Query filter
         if (searchQuery.trim() !== '') {
           const query = searchQuery.toLowerCase();
           const matchesTitle = item.title.toLowerCase().includes(query);
@@ -140,32 +143,16 @@ export default function BrowseFoundPage() {
           }
         }
 
-        // 2. Category filter
         if (selectedCategory !== 'All' && item.category !== selectedCategory) {
           return false;
         }
 
-        // 3. Location filter
         if (selectedLocation !== 'All Locations') {
           const itemLoc = item.location.toLowerCase();
           const selLoc = selectedLocation.toLowerCase();
           if (!itemLoc.includes(selLoc) && item.location !== selectedLocation) {
             return false;
           }
-        }
-
-        // 4. Date filter
-        if (selectedDateFilter === 'today' && (item.daysAgo ?? 0) > 0) {
-          return false;
-        }
-        if (selectedDateFilter === 'past3days' && (item.daysAgo ?? 0) > 3) {
-          return false;
-        }
-        if (selectedDateFilter === 'pastweek' && (item.daysAgo ?? 0) > 7) {
-          return false;
-        }
-        if (selectedDateFilter === 'pastmonth' && (item.daysAgo ?? 0) > 30) {
-          return false;
         }
 
         return true;
@@ -182,13 +169,12 @@ export default function BrowseFoundPage() {
         }
         return 0;
       });
-  }, [foundItems, searchQuery, selectedCategory, selectedLocation, selectedDateFilter, sortBy]);
+  }, [foundItems, searchQuery, selectedCategory, selectedLocation, sortBy]);
 
   const handleResetFilters = () => {
     setSearchQuery('');
     setSelectedCategory('All');
     setSelectedLocation('All Locations');
-    setSelectedDateFilter('all');
     setSortBy('newest');
   };
 
@@ -196,7 +182,6 @@ export default function BrowseFoundPage() {
     searchQuery.trim() !== '',
     selectedCategory !== 'All',
     selectedLocation !== 'All Locations',
-    selectedDateFilter !== 'all',
   ].filter(Boolean).length;
 
   // Handle Delete / Archive Confirmation
@@ -215,7 +200,6 @@ export default function BrowseFoundPage() {
         throw new Error(res.error || 'Failed to delete report.');
       }
 
-      // Remove deleted item from local state
       setFoundItems((prev) => prev.filter((i) => i.id !== itemToDelete.id));
 
       if (selectedItem?.id === itemToDelete.id) {
@@ -236,182 +220,168 @@ export default function BrowseFoundPage() {
 
   if (authChecking) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center gap-3">
-        <div className="h-8 w-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-        <p className="text-xs font-semibold text-slate-500">Verifying administrator authorization...</p>
+      <div className="app" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+        <RefreshCw className="h-8 w-8 animate-spin" style={{ color: 'var(--purple)', marginBottom: '12px' }} />
+        <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--navy)' }}>Verifying administrative authorization...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 selection:bg-indigo-500 selection:text-white">
-      <Navbar />
+    <div className="app">
+      <Header />
 
-      {/* Admin Toast Alert */}
-      {toastMessage && (
-        <div className="fixed top-20 right-5 z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-xl border border-slate-700 flex items-center gap-2.5 text-xs font-bold animate-in slide-in-from-top duration-200">
-          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+      <main className="dashboard-page section-shell" style={{ paddingBottom: '90px' }}>
+        {/* Header Title Bar */}
+        <div className="dashboard-heading">
+          <div>
+            <span className="section-kicker">Administrative Registry Console · {currentUser?.role} Mode</span>
+            <h1>Campus Registry of Found Property</h1>
+            <p>Official directory of active discovered items logged into campus security custody.</p>
+          </div>
 
-      {/* Top Banner with Admin Context */}
-      <section className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white pt-10 pb-12 px-4 sm:px-6 lg:px-8 border-b border-slate-800">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-bold mb-3">
-                <Shield className="h-3.5 w-3.5 text-indigo-400" />
-                <span>Administrative Registry Console • {currentUser?.role} Mode</span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-                Campus Registry of Found Property
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl">
-                Official directory of active discovered items logged into campus security custody. Manage entries, review custody storage, and delete outdated reports.
-              </p>
-            </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              onClick={fetchItems}
+              disabled={isLoading}
+              className="button button-quiet"
+              style={{ minHeight: '40px', fontSize: '12px' }}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh Registry
+            </button>
 
-            <div className="flex items-center gap-2.5 self-start md:self-auto">
-              <button
-                onClick={fetchItems}
-                disabled={isLoading}
-                className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition-all shadow-xs"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin text-indigo-400' : ''}`} />
-                <span>Refresh Registry</span>
-              </button>
-
-              <Link
-                href="/admin"
-                className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-slate-950 bg-white hover:bg-slate-100 rounded-xl transition-all shadow-xs"
-              >
-                <span>Admin Operations</span>
-                <ArrowUpRight className="h-3.5 w-3.5 text-slate-600" />
-              </Link>
-            </div>
+            <Link
+              href="/admin"
+              className="button button-admin"
+              style={{ minHeight: '40px', fontSize: '12px' }}
+            >
+              <ShieldCheck className="h-4 w-4" />
+              Admin Portal
+            </Link>
           </div>
         </div>
-      </section>
 
-      {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-6">
-        
-        {/* Search & Filter Bar */}
-        <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
-          <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
-            
-            {/* Search Input */}
-            <div className="relative flex-1">
-              <Search className="h-4 w-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+        {/* Search & Filters */}
+        <div style={{ background: 'var(--paper)', padding: '20px', borderRadius: '16px', border: '1px solid var(--line)', margin: '24px 0 28px' }}>
+          <div className="recent-tools" style={{ marginBottom: 0 }}>
+            <div className="recent-search" style={{ maxWidth: '100%' }}>
+              <Search className="h-4 w-4" />
               <input
                 type="text"
-                placeholder="Search by keyword, item name, storage desk, or ID..."
+                placeholder="Search by keyword, item name, custody location, or ref code..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full text-xs pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                  style={{ border: 0, background: 'none', color: 'var(--muted)', cursor: 'pointer' }}
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="h-4 w-4" />
                 </button>
               )}
             </div>
+          </div>
 
-            {/* Category Dropdown */}
-            <div className="w-full sm:w-auto">
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full sm:w-auto text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700 cursor-pointer"
-              >
-                <option value="All">All Categories</option>
-                {CATEGORIES.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', marginTop: '14px', paddingTop: '14px', borderTop: '1px solid var(--line)' }}>
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              style={{
+                height: '38px',
+                padding: '0 12px',
+                borderRadius: '9px',
+                border: '1px solid var(--line)',
+                background: '#f8f4ee',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: 'var(--navy)',
+                outline: 0
+              }}
+            >
+              <option value="All">All Categories</option>
+              {CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
 
-            {/* Location Dropdown */}
-            <div className="w-full sm:w-auto">
-              <select
-                value={selectedLocation}
-                onChange={(e) => setSelectedLocation(e.target.value)}
-                className="w-full sm:w-auto text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700 cursor-pointer"
-              >
-                <option value="All Locations">All Locations</option>
-                {locationOptions.map((loc) => (
-                  <option key={loc} value={loc}>
-                    {loc}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <select
+              value={selectedLocation}
+              onChange={(e) => setSelectedLocation(e.target.value)}
+              style={{
+                height: '38px',
+                padding: '0 12px',
+                borderRadius: '9px',
+                border: '1px solid var(--line)',
+                background: '#f8f4ee',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: 'var(--navy)',
+                outline: 0
+              }}
+            >
+              <option value="All Locations">All Locations</option>
+              {locationOptions.map((loc) => (
+                <option key={loc} value={loc}>{loc}</option>
+              ))}
+            </select>
 
-            {/* Sort Dropdown */}
-            <div className="w-full sm:w-auto">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
-                className="w-full sm:w-auto text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700 cursor-pointer"
-              >
-                <option value="newest">Newest First</option>
-                <option value="oldest">Oldest First</option>
-                <option value="title">Alphabetical (A-Z)</option>
-              </select>
-            </div>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              style={{
+                height: '38px',
+                padding: '0 12px',
+                borderRadius: '9px',
+                border: '1px solid var(--line)',
+                background: '#f8f4ee',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: 'var(--navy)',
+                outline: 0
+              }}
+            >
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="title">Alphabetical (A-Z)</option>
+            </select>
 
-            {/* Reset Button */}
             {activeFiltersCount > 0 && (
               <button
                 onClick={handleResetFilters}
-                className="inline-flex items-center justify-center gap-1 px-3 py-2.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0"
+                className="button button-ghost"
+                style={{ minHeight: '38px', padding: '0 14px', fontSize: '11px', color: 'var(--coral)' }}
               >
-                <X className="h-3.5 w-3.5" />
-                <span>Reset ({activeFiltersCount})</span>
+                <X className="h-3.5 w-3.5" /> Reset ({activeFiltersCount})
               </button>
             )}
 
-          </div>
-
-          {/* Results Summary Counter */}
-          <div className="flex items-center justify-between text-xs text-slate-500 pt-3 border-t border-slate-100">
-            <span>
-              Showing <strong className="text-slate-800">{filteredItems.length}</strong> active found {filteredItems.length === 1 ? 'item' : 'items'} in campus registry
-            </span>
-            <span className="text-[11px] text-slate-400">
-              Only items held in campus custody are listed
+            <span style={{ marginLeft: 'auto', fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>
+              Showing <strong>{filteredItems.length}</strong> active found {filteredItems.length === 1 ? 'item' : 'items'} in campus registry
             </span>
           </div>
         </div>
 
-        {/* Loading Spinner */}
+        {/* Loading State */}
         {isLoading && (
-          <div className="p-16 text-center space-y-3 bg-white rounded-2xl border border-slate-200/80">
-            <div className="h-8 w-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-xs font-semibold text-slate-500">Loading campus registry database...</p>
+          <div className="recent-empty">
+            <RefreshCw className="h-6 w-6 animate-spin" style={{ margin: '0 auto 8px', color: 'var(--purple)' }} />
+            <p>Loading campus registry database...</p>
           </div>
         )}
 
         {/* Empty State */}
         {!isLoading && filteredItems.length === 0 && (
-          <div className="p-16 text-center bg-white rounded-2xl border border-slate-200/80 space-y-3">
-            <div className="h-12 w-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
-              <Search className="h-6 w-6" />
-            </div>
-            <h3 className="text-base font-bold text-slate-800">No Found Items Match Criteria</h3>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              No registered items match the selected search query or filters. Try adjusting your search keywords.
-            </p>
+          <div className="recent-empty">
+            <Search className="h-8 w-8" style={{ margin: '0 auto 10px', color: 'var(--muted)' }} />
+            <h3 style={{ font: '800 18px "Manrope"', color: 'var(--navy)', margin: '0 0 6px' }}>No Found Items Match Criteria</h3>
+            <p style={{ margin: 0, fontSize: '12px' }}>No registered items match the selected search query or filters.</p>
             {activeFiltersCount > 0 && (
               <button
                 onClick={handleResetFilters}
-                className="px-4 py-2 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-xl hover:bg-indigo-100 transition-colors"
+                className="button button-quiet"
+                style={{ marginTop: '16px', minHeight: '36px', fontSize: '11px' }}
               >
                 Reset All Filters
               </button>
@@ -421,257 +391,196 @@ export default function BrowseFoundPage() {
 
         {/* Found Items Cards Grid */}
         {!isLoading && filteredItems.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredItems.map((item) => (
-              <div
-                key={item.id}
-                className="bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-lg hover:border-slate-300 transition-all duration-200 flex flex-col justify-between overflow-hidden group"
-              >
-                <div className="p-6">
-                  
-                  {/* Top Badge Row */}
-                  <div className="flex items-center justify-between gap-2 mb-3.5">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      Found Item
-                    </span>
-                    <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md flex items-center gap-1">
-                      <Tag className="h-3 w-3 text-slate-400" />
-                      {item.category}
-                    </span>
+          <div className="recent-grid">
+            {filteredItems.map((item, idx) => {
+              const iconName = getItemIcon(item.category, item.title);
+              const colorVariant = idx % 3 === 0 ? 'mint' : idx % 3 === 1 ? 'amber' : 'violet';
+
+              return (
+                <article key={item.id} className={`recent-card ${colorVariant}`}>
+                  <div className="recent-art">
+                    <span className="recent-pill">Found Property</span>
+                    <Icon name={iconName} size={64} />
                   </div>
 
-                  {/* Title */}
-                  <h3
-                    onClick={() => setSelectedItem(item)}
-                    className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1 cursor-pointer"
-                  >
-                    {item.title}
-                  </h3>
+                  <div className="recent-body">
+                    <span className="recent-time">#{item.id}</span>
+                    <h3>{item.title}</h3>
+                    <p>
+                      <MapPin className="h-3 w-3" />
+                      <span>{item.location}</span>
+                    </p>
+                    {item.storageLocation && (
+                      <p style={{ marginTop: '3px', color: 'var(--teal)', fontWeight: 700 }}>
+                        <Building2 className="h-3 w-3" />
+                        <span>{item.storageLocation}</span>
+                      </p>
+                    )}
 
-                  {/* Description */}
-                  <p className="text-xs text-slate-600 mt-2 line-clamp-2 leading-relaxed">
-                    {item.description}
-                  </p>
+                    <div style={{ display: 'flex', gap: '6px', marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--line)' }}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedItem(item)}
+                        className="button button-light"
+                        style={{ flex: 1, minHeight: '34px', fontSize: '11px' }}
+                      >
+                        <Eye className="h-3.5 w-3.5" /> View Details
+                      </button>
 
-                  {/* Location & Date */}
-                  <div className="mt-4 pt-3 border-t border-slate-100 space-y-1.5 text-xs text-slate-500">
-                    <div className="flex items-center gap-1.5">
-                      <MapPin className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
-                      <span className="font-medium text-slate-700 truncate">{item.location}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                      <span>{item.date}</span>
+                      <button
+                        type="button"
+                        onClick={() => setItemToDelete(item)}
+                        title="Delete / Archive report"
+                        className="button button-ghost"
+                        style={{ minHeight: '34px', width: '34px', padding: 0, display: 'grid', placeItems: 'center', color: 'var(--coral)' }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </div>
-
-                  {/* Current Storage Custody Pill */}
-                  {item.storageLocation && (
-                    <div className="mt-3.5 flex items-center gap-1.5 text-[11px] font-medium text-emerald-800 bg-emerald-50/70 border border-emerald-100 px-2.5 py-1.5 rounded-lg">
-                      <Building2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                      <span className="truncate">{item.storageLocation}</span>
-                    </div>
-                  )}
-
-                </div>
-
-                {/* Card Footer with "View Details" and "Delete" buttons */}
-                <div className="px-6 py-3.5 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-slate-400 font-mono">
-                    #{item.id}
-                  </span>
-
-                  <div className="flex items-center gap-2">
-                    {/* Delete Option (Admin-only action) */}
-                    <button
-                      onClick={() => setItemToDelete(item)}
-                      title="Delete / Archive this report"
-                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 rounded-lg transition-all cursor-pointer"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-
-                    {/* View Details Button (Pure details, zero questioning) */}
-                    <button
-                      onClick={() => setSelectedItem(item)}
-                      className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs active:scale-95 transition-all cursor-pointer"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                      <span>View Details</span>
-                    </button>
-                  </div>
-                </div>
-
-              </div>
-            ))}
+                </article>
+              );
+            })}
           </div>
         )}
-
       </main>
 
-      {/* ADMIN ITEM DETAILS MODAL (Completely Questioning-Free) */}
+      {/* ITEM DETAILS MODAL */}
       {selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 relative max-h-[92vh] flex flex-col overflow-hidden">
-            
-            {/* Modal Header */}
-            <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase">
-                    <CheckCircle2 className="h-3 w-3" /> Found Item
-                  </span>
-                  <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                    {selectedItem.category}
-                  </span>
-                  <span className="text-xs font-mono text-slate-400">
-                    #{selectedItem.id}
-                  </span>
-                </div>
-                <h2 className="text-xl sm:text-2xl font-bold text-slate-900">
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 999,
+          background: 'rgba(29, 21, 26, .6)',
+          backdropFilter: 'blur(4px)',
+          display: 'grid',
+          placeItems: 'center',
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'var(--paper)',
+            borderRadius: '16px',
+            border: '1px solid var(--line)',
+            padding: '28px',
+            maxWidth: '560px',
+            width: '100%',
+            boxShadow: 'var(--shadow)',
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--line)', paddingBottom: '16px', marginBottom: '16px' }}>
+              <div>
+                <span className="type-badge found">Found Item · #{selectedItem.id}</span>
+                <h2 style={{ margin: '6px 0 0', font: '800 22px "Manrope"', color: 'var(--navy)' }}>
                   {selectedItem.title}
                 </h2>
               </div>
-
               <button
                 onClick={() => setSelectedItem(null)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition-colors"
+                style={{ border: 0, background: 'none', color: 'var(--muted)', cursor: 'pointer' }}
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="overflow-y-auto py-4 space-y-4 flex-1 text-xs">
-              
-              {/* Image Preview if available */}
+            <div style={{ display: 'grid', gap: '14px', fontSize: '12px' }}>
               {selectedItem.imageUrl && (
-                <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 max-h-60 flex items-center justify-center">
-                  <img
-                    src={selectedItem.imageUrl}
-                    alt={selectedItem.title}
-                    className="w-full h-full object-contain max-h-60"
-                  />
+                <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--line)', maxHeight: '200px' }}>
+                  <img src={selectedItem.imageUrl} alt={selectedItem.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
               )}
 
-              {/* Item Details Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                <div className="flex items-start gap-2.5">
-                  <MapPin className="h-4 w-4 text-indigo-500 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Discovery Location</span>
-                    <span className="font-semibold text-slate-800">{selectedItem.location}</span>
-                  </div>
+              <div style={{ background: '#f1e6d7', padding: '16px', borderRadius: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <span style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)' }}>Discovery Location</span>
+                  <strong style={{ display: 'block', color: 'var(--navy)', marginTop: '2px' }}>{selectedItem.location}</strong>
                 </div>
-
-                <div className="flex items-start gap-2.5">
-                  <Calendar className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Reported Date</span>
-                    <span className="font-semibold text-slate-800">{selectedItem.date}</span>
-                  </div>
+                <div>
+                  <span style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)' }}>Date Logged</span>
+                  <strong style={{ display: 'block', color: 'var(--navy)', marginTop: '2px' }}>{selectedItem.date}</strong>
                 </div>
-
-                <div className="flex items-start gap-2.5">
-                  <Building2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Custody Holding Point</span>
-                    <span className="font-semibold text-emerald-900">{selectedItem.storageLocation || 'Main Security Office Desk'}</span>
-                  </div>
+                <div>
+                  <span style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)' }}>Custody Location</span>
+                  <strong style={{ display: 'block', color: 'var(--teal)', marginTop: '2px' }}>{selectedItem.storageLocation || 'Campus Security Locker'}</strong>
                 </div>
-
-                <div className="flex items-start gap-2.5">
-                  <User className="h-4 w-4 text-indigo-500 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Turned in by</span>
-                    <span className="font-semibold text-slate-800 capitalize">
-                      {selectedItem.reportedBy.name} ({selectedItem.reportedBy.role})
-                    </span>
-                  </div>
+                <div>
+                  <span style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)' }}>Turned in by</span>
+                  <strong style={{ display: 'block', color: 'var(--navy)', marginTop: '2px' }}>{selectedItem.reportedBy?.name || 'Campus Member'}</strong>
                 </div>
               </div>
 
-              {/* Description */}
               <div>
-                <h4 className="font-bold text-slate-700 uppercase text-[11px] mb-1">
-                  Public Notes &amp; Description
-                </h4>
-                <p className="text-xs text-slate-700 leading-relaxed bg-white border border-slate-200 p-3.5 rounded-xl">
+                <span style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)' }}>Public Description</span>
+                <p style={{ margin: '4px 0 0', padding: '12px', background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: '10px', color: 'var(--ink)' }}>
                   {selectedItem.description}
                 </p>
               </div>
 
-              {/* Status Info Card */}
-              <div className="p-3.5 bg-indigo-50/70 border border-indigo-100 rounded-xl text-indigo-950 flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 block">Registry Status</span>
-                  <span className="font-bold capitalize">{selectedItem.status} in Campus Custody</span>
-                </div>
-                <Link
-                  href="/admin/matches"
-                  className="px-3 py-1.5 bg-white text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg font-bold text-xs shadow-2xs transition-colors"
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '14px', borderTop: '1px solid var(--line)' }}>
+                <button
+                  type="button"
+                  onClick={() => setItemToDelete(selectedItem)}
+                  className="button button-ghost"
+                  style={{ color: 'var(--coral)' }}
                 >
-                  Match &amp; Return Console
-                </Link>
+                  <Trash2 className="h-4 w-4" /> Delete Report
+                </button>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <Link href="/admin?tab=matches" className="button button-admin" style={{ fontSize: '11px' }}>
+                    Match &amp; Return
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedItem(null)}
+                    className="button button-ghost"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
-
             </div>
-
-            {/* Modal Footer with Delete and Close */}
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setItemToDelete(selectedItem);
-                }}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors cursor-pointer"
-              >
-                <Trash2 className="h-4 w-4" />
-                <span>Delete Report</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSelectedItem(null)}
-                className="px-5 py-2.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl shadow-xs transition-colors cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
-
           </div>
         </div>
       )}
 
-      {/* DELETE / ARCHIVE CONFIRMATION MODAL */}
+      {/* DELETE CONFIRMATION MODAL */}
       {itemToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-            <div className="flex items-center gap-3 text-rose-600">
-              <div className="h-10 w-10 rounded-xl bg-rose-100 flex items-center justify-center shrink-0">
-                <AlertTriangle className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Delete Item Report?</h3>
-                <p className="text-xs text-slate-500">Report #{itemToDelete.id}</p>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Are you sure you want to delete and archive <strong className="text-slate-900">&ldquo;{itemToDelete.title}&rdquo;</strong>? This item will be removed from the active campus registry.
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 999,
+          background: 'rgba(29, 21, 26, .6)',
+          backdropFilter: 'blur(4px)',
+          display: 'grid',
+          placeItems: 'center',
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'var(--paper)',
+            borderRadius: '16px',
+            border: '1px solid var(--line)',
+            padding: '24px',
+            maxWidth: '460px',
+            width: '100%',
+            boxShadow: 'var(--shadow)'
+          }}>
+            <h3 style={{ margin: '0 0 8px', font: '800 18px "Manrope"', color: 'var(--navy)' }}>
+              Delete Item Report?
+            </h3>
+            <p style={{ margin: '0 0 16px', fontSize: '12px', color: 'var(--muted)' }}>
+              Are you sure you want to archive <strong>&ldquo;{itemToDelete.title}&rdquo;</strong> (#{itemToDelete.id})? This will remove it from the active campus registry.
             </p>
 
             {deleteError && (
-              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700">
+              <div style={{ padding: '10px', background: 'var(--coral-soft)', color: 'var(--coral)', borderRadius: '8px', fontSize: '11px', marginBottom: '12px' }}>
                 {deleteError}
               </div>
             )}
 
-            <form onSubmit={handleDeleteReport} className="space-y-4">
+            <form onSubmit={handleDeleteReport} style={{ display: 'grid', gap: '12px' }}>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
+                <label style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--navy)' }}>
                   Reason for Deletion
                 </label>
                 <input
@@ -679,11 +588,21 @@ export default function BrowseFoundPage() {
                   placeholder="e.g. Duplicate report, resolved offline, spam..."
                   value={deleteReason}
                   onChange={(e) => setDeleteReason(e.target.value)}
-                  className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  style={{
+                    width: '100%',
+                    height: '38px',
+                    padding: '0 12px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--line)',
+                    fontSize: '11px',
+                    outline: 0,
+                    background: '#f8f4ee',
+                    marginTop: '4px'
+                  }}
                 />
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
                 <button
                   type="button"
                   onClick={() => {
@@ -692,32 +611,29 @@ export default function BrowseFoundPage() {
                     setDeleteError(null);
                   }}
                   disabled={isDeleting}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                  className="button button-ghost"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isDeleting}
-                  className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-md active:scale-95 disabled:opacity-50 transition-all cursor-pointer"
+                  className="button"
+                  style={{ background: 'var(--coral)', color: 'white' }}
                 >
-                  {isDeleting ? (
-                    <>
-                      <div className="h-3.5 w-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                      <span>Deleting...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="h-3.5 w-3.5" />
-                      <span>Confirm Deletion</span>
-                    </>
-                  )}
+                  {isDeleting ? 'Deleting...' : 'Confirm Deletion'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {/* Toast */}
+      <div className={`toast ${toastMessage ? 'show' : ''}`}>
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        <span>{toastMessage}</span>
+      </div>
 
       <Footer />
     </div>

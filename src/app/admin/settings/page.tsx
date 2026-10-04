@@ -17,8 +17,6 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
 import { getCurrentUser, updateAdminProfile, logoutUser } from '@/app/actions/auth';
 
 export default function AdminSettingsPage() {
@@ -122,22 +120,31 @@ export default function AdminSettingsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col justify-between">
-        <Navbar />
-        <div className="flex-1 flex flex-col items-center justify-center p-8">
-          <RefreshCw className="h-8 w-8 text-purple-600 animate-spin mb-3" />
-          <p className="text-sm font-semibold text-slate-600">Verifying administrator authorization...</p>
-        </div>
-        <Footer />
+      <div className="flex flex-col items-center justify-center p-12">
+        <RefreshCw className="h-8 w-8 text-purple-600 animate-spin mb-3" />
+        <p className="text-sm font-semibold text-slate-600">Verifying administrator authorization...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col justify-between text-slate-900">
-      <Navbar />
+    <div className="space-y-6 max-w-4xl">
+      {/* Topbar */}
+      <div className="admin-topbar">
+        <div>
+          <span className="match-kicker">Security &amp; Credentials</span>
+          <h1>Admin Settings</h1>
+          <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '13px' }}>
+            Update administrator credentials, profile name, and system security password.
+          </p>
+        </div>
 
-      <main className="flex-1 py-10 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto w-full">
+        <div>
+          <span className="verified">
+            Admin Profile Active
+          </span>
+        </div>
+      </div>
         {/* Navigation Breadcrumb */}
         <div className="mb-6 flex items-center justify-between">
           <Link
@@ -367,9 +374,6 @@ export default function AdminSettingsPage() {
 
           </form>
         </div>
-      </main>
-
-      <Footer />
     </div>
   );
 }
