@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -13,15 +13,14 @@ import {
   MapPin, 
   Tag, 
   RefreshCw, 
-  ChevronRight,
-  Sparkles,
-  Check,
-  XCircle,
-  AlertTriangle
+  Sparkles, 
+  Check, 
+  XCircle, 
+  AlertTriangle 
 } from 'lucide-react';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
-import Sidebar from '@/components/dashboard/Sidebar';
+import { Header } from '@/components/ui/Header';
+import { Footer } from '@/components/ui/Footer';
+import { Icon } from '@/components/ui/Icon';
 import { 
   getMyVerificationRequests, 
   submitVerificationAnswers, 
@@ -30,7 +29,6 @@ import {
 import { getCurrentUser } from '@/app/actions/auth';
 
 export default function StudentVerificationPage() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [requests, setRequests] = useState<VerificationRequestData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +47,7 @@ export default function StudentVerificationPage() {
 
       // Initialize answers state
       const initialAnswers: Record<string, Record<string, string>> = {};
-      data.forEach((req) => {
+      (data || []).forEach((req) => {
         initialAnswers[req.id] = {};
         req.questions.forEach((q) => {
           initialAnswers[req.id][q.id] = q.answerText || '';
@@ -112,275 +110,292 @@ export default function StudentVerificationPage() {
     switch (status) {
       case 'ACCEPTED':
         return (
-          <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-3 py-1 rounded-full">
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-            Verified &amp; Accepted
+          <span className="status ready">
+            <i></i> Verified &amp; Accepted
           </span>
         );
       case 'ANSWERED':
         return (
-          <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-800 bg-blue-100 border border-blue-300 px-3 py-1 rounded-full">
-            <Clock className="h-3.5 w-3.5 text-blue-600" />
-            Answers Submitted (Under Review)
+          <span className="status review">
+            <i></i> Answers Under Review
           </span>
         );
       case 'CLARIFICATION_REQUESTED':
         return (
-          <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-800 bg-amber-100 border border-amber-300 px-3 py-1 rounded-full">
-            <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
-            Clarification Requested
+          <span className="status searching">
+            <i></i> Clarification Requested
           </span>
         );
       case 'REJECTED':
         return (
-          <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-800 bg-rose-100 border border-rose-300 px-3 py-1 rounded-full">
-            <XCircle className="h-3.5 w-3.5 text-rose-600" />
-            Verification Unsuccessful
+          <span className="status searching">
+            <i></i> Verification Unsuccessful
           </span>
         );
       case 'PENDING':
       default:
         return (
-          <span className="inline-flex items-center gap-1 text-xs font-bold text-purple-800 bg-purple-100 border border-purple-300 px-3 py-1 rounded-full animate-pulse">
-            <HelpCircle className="h-3.5 w-3.5 text-purple-600" />
-            Action Required: Answer Questions
+          <span className="status match">
+            <i></i> Action Required: Answer Questions
           </span>
         );
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex">
-      {/* 1. Sidebar */}
-      <Sidebar 
-        currentTab="verification" 
-        isOpen={sidebarOpen} 
-        onClose={() => setSidebarOpen(false)}
-        userRole="STUDENT"
-      />
+    <div className="app">
+      <Header />
 
-      {/* Main Content Area */}
-      <div className="flex-1 lg:pl-72 flex flex-col min-w-0">
+      <main className="dashboard-page section-shell" style={{ paddingBottom: '90px' }}>
         
-        {/* Top Header */}
-        <header className="bg-white border-b border-slate-200/80 sticky top-0 z-30">
-          <div className="px-4 sm:px-6 lg:px-8 py-5 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="lg:hidden p-2 -ml-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-              >
-                <HelpCircle className="h-6 w-6 text-purple-600" />
-              </button>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-purple-700 bg-purple-100 px-2.5 py-0.5 rounded-full">
-                    Proof &amp; Custody
-                  </span>
-                  <span className="text-xs text-slate-400">•</span>
-                  <span className="text-xs text-slate-500 font-medium">Logged in as {currentUser?.name}</span>
-                </div>
-                <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-0.5">
-                  My Verification Inquiries
-                </h1>
-              </div>
+        {/* Navigation Breadcrumb */}
+        <div style={{ marginBottom: '28px' }}>
+          <Link
+            href="/dashboard"
+            className="back-link"
+            style={{ marginBottom: '16px', display: 'inline-flex' }}
+          >
+            <Icon name="arrow" size={16} /> Back to dashboard
+          </Link>
+
+          <div className="dashboard-heading" style={{ marginBottom: 0 }}>
+            <div>
+              <span className="section-kicker">Proof of ownership queue</span>
+              <h1>My Verification Inquiries</h1>
+              <p>Answer specific proof questions sent by Campus Safety to verify your ownership.</p>
             </div>
 
             <button
+              type="button"
               onClick={loadRequests}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
+              className="button button-quiet"
+              style={{ minHeight: '40px', fontSize: '12px' }}
             >
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
+              Refresh Inquiries
             </button>
           </div>
-        </header>
+        </div>
+
+        {/* Informational Banner */}
+        <div
+          style={{
+            padding: '18px 22px',
+            marginBottom: '28px',
+            borderRadius: '16px',
+            background: 'var(--navy)',
+            color: 'var(--paper)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+          }}
+        >
+          <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(246,237,223,.1)', display: 'grid', placeItems: 'center', color: '#d4ae68', flexShrink: 0 }}>
+            <Sparkles className="h-5 w-5" />
+          </div>
+          <div>
+            <strong style={{ display: 'block', fontSize: '13px', color: 'var(--paper)' }}>
+              How Ownership Verification Works
+            </strong>
+            <span style={{ fontSize: '11px', color: 'rgba(246,237,223,.65)', lineHeight: 1.5 }}>
+              Security cross-examines your confidential answers (color details, unique markings, internal items) against the held property before clearing physical handover.
+            </span>
+          </div>
+        </div>
 
         {/* Content Body */}
-        <main className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-5xl w-full mx-auto">
-          
-          <div className="bg-gradient-to-r from-purple-900 to-indigo-900 text-white rounded-3xl p-6 sm:p-8 shadow-sm">
-            <div className="flex items-start gap-4">
-              <div className="h-12 w-12 rounded-2xl bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center shrink-0">
-                <Sparkles className="h-6 w-6 text-amber-300" />
-              </div>
-              <div className="space-y-1.5">
-                <h2 className="text-lg sm:text-xl font-bold">Ownership Verification System</h2>
-                <p className="text-xs sm:text-sm text-purple-200 leading-relaxed max-w-2xl">
-                  When campus staff or finders hold an item, Campus Security sends custom verification questions to confirm genuine ownership before releasing custody. Answer accurately with distinct identifiers (markings, contents, lockscreen details).
-                </p>
-              </div>
-            </div>
+        {loading ? (
+          <div className="recent-empty">
+            <RefreshCw className="h-8 w-8 animate-spin" style={{ color: 'var(--purple)', margin: '0 auto 10px' }} />
+            <p>Loading your verification inquiries...</p>
           </div>
-
-          {loading ? (
-            <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center">
-              <RefreshCw className="h-8 w-8 text-purple-600 animate-spin mx-auto mb-3" />
-              <p className="text-sm font-semibold text-slate-600">Loading your verification inquiries...</p>
+        ) : requests.length === 0 ? (
+          <div className="recent-empty" style={{ padding: '60px 20px' }}>
+            <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'var(--teal-soft)', color: 'var(--teal)', display: 'grid', placeItems: 'center', margin: '0 auto 14px' }}>
+              <ShieldCheck className="h-7 w-7" />
             </div>
-          ) : requests.length === 0 ? (
-            <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center space-y-3">
-              <div className="h-14 w-14 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center mx-auto">
-                <ShieldCheck className="h-7 w-7" />
-              </div>
-              <h3 className="text-base font-bold text-slate-900">No Verification Questions Pending</h3>
-              <p className="text-xs text-slate-500 max-w-md mx-auto">
-                You currently have no outstanding verification requests. When Campus Security requires proof for a reported item, the questions will appear here.
-              </p>
-              <div className="pt-2">
-                <Link
-                  href="/dashboard"
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 px-4 py-2 rounded-xl transition-colors"
+            <h2 style={{ font: '800 20px "Manrope"', color: 'var(--navy)', margin: '0 0 6px' }}>No Pending Inquiries</h2>
+            <p style={{ margin: 0, fontSize: '12px' }}>
+              You have no active verification questionnaires awaiting your response.
+            </p>
+            <Link href="/dashboard" className="button button-quiet" style={{ marginTop: '18px', minHeight: '38px', fontSize: '11px', display: 'inline-flex' }}>
+              Return to Dashboard
+            </Link>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: '24px' }}>
+            {requests.map((req) => {
+              const canEdit = req.status === 'PENDING' || req.status === 'CLARIFICATION_REQUESTED';
+
+              return (
+                <div
+                  key={req.id}
+                  style={{
+                    background: 'var(--paper)',
+                    border: '1px solid var(--line)',
+                    borderRadius: '16px',
+                    overflow: 'hidden',
+                    boxShadow: 'var(--shadow)',
+                  }}
                 >
-                  Return to Dashboard
-                </Link>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {requests.map((req) => {
-                const canEdit = req.status === 'PENDING' || req.status === 'CLARIFICATION_REQUESTED';
-
-                return (
-                  <div key={req.id} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden transition-all">
-                    
-                    {/* Item and Inquiry Header */}
-                    <div className="bg-slate-50/80 p-5 sm:p-6 border-b border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div className="flex items-start gap-4">
-                        <div className="h-12 w-12 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center shrink-0">
-                          <Package className="h-6 w-6" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">
-                              Inquiry #{req.id.slice(-6)}
-                            </span>
-                            <span className="text-xs text-slate-300">•</span>
-                            <span className="text-xs font-semibold text-slate-600 flex items-center gap-1">
-                              <Tag className="h-3 w-3 text-slate-400" />
-                              {req.item.category}
-                            </span>
-                            <span className="text-xs text-slate-300">•</span>
-                            <span className="text-xs font-semibold text-slate-600 flex items-center gap-1">
-                              <MapPin className="h-3 w-3 text-slate-400" />
-                              {req.item.location}
-                            </span>
-                          </div>
-
-                          <h3 className="text-lg font-bold text-slate-900">
-                            {req.item.name}
-                          </h3>
-
-                          {req.item.storageLocation && (
-                            <p className="text-xs text-emerald-700 font-semibold mt-0.5">
-                              Locker Storage: {req.item.storageLocation}
-                            </p>
-                          )}
-                        </div>
+                  {/* Header */}
+                  <div
+                    style={{
+                      padding: '20px 24px',
+                      borderBottom: '1px solid var(--line)',
+                      background: '#f8f4ee',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: '12px',
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px' }}>
+                        <span className="type-badge found">{req.item.category}</span>
+                        <span style={{ fontSize: '10px', color: 'var(--muted)', fontWeight: 700 }}>
+                          Ref #{req.item.id} · Found at {req.item.location}
+                        </span>
                       </div>
-
-                      <div className="self-start md:self-auto">
-                        {getStatusBadge(req.status)}
-                      </div>
-                    </div>
-
-                    {/* Admin Note / Clarification Banner */}
-                    {req.adminNotes && (
-                      <div className="bg-amber-50/80 border-b border-amber-200/80 px-6 py-3 flex items-start gap-2.5 text-xs text-amber-900">
-                        <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                        <div>
-                          <span className="font-bold">Message from Campus Security: </span>
-                          <span>{req.adminNotes}</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Feedback message */}
-                    {feedback?.id === req.id && (
-                      <div className="p-4 mx-6 mt-4 rounded-2xl text-xs font-semibold flex items-center gap-2 bg-slate-50 border">
-                        {feedback.error ? (
-                          <div className="text-rose-700 flex items-center gap-2">
-                            <AlertCircle className="h-4 w-4 shrink-0" />
-                            <span>{feedback.error}</span>
-                          </div>
-                        ) : (
-                          <div className="text-emerald-700 flex items-center gap-2">
-                            <CheckCircle2 className="h-4 w-4 shrink-0" />
-                            <span>{feedback.success}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Questions Form / Preview */}
-                    <div className="p-6 sm:p-8 space-y-6">
-                      <div className="space-y-4">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                          Verification Questions ({req.questions.length})
-                        </h4>
-
-                        <div className="space-y-4">
-                          {req.questions.map((q, idx) => {
-                            const currentValue = answersState[req.id]?.[q.id] ?? (q.answerText || '');
-
-                            return (
-                              <div key={q.id} className="bg-slate-50/60 rounded-2xl p-4 sm:p-5 border border-slate-200/80 space-y-2">
-                                <label className="block text-xs font-bold text-slate-800">
-                                  <span className="text-purple-600 font-extrabold mr-1.5">Q{idx + 1}.</span>
-                                  {q.questionText}
-                                </label>
-
-                                {canEdit ? (
-                                  <textarea
-                                    rows={2}
-                                    value={currentValue}
-                                    onChange={(e) => handleAnswerChange(req.id, q.id, e.target.value)}
-                                    placeholder="Provide detailed description, color shade, unique scratch marks, serial numbers, or internal contents..."
-                                    className="w-full text-xs bg-white border border-slate-300 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-purple-600"
-                                  />
-                                ) : (
-                                  <div className="bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-700 font-medium italic">
-                                    {q.answerText || <span className="text-slate-400 not-italic">No answer recorded.</span>}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Action Button */}
-                      {canEdit && (
-                        <div className="flex items-center justify-end pt-2 border-t border-slate-100">
-                          <button
-                            onClick={() => handleSubmit(req)}
-                            disabled={submittingId === req.id}
-                            className="inline-flex items-center gap-2 px-6 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
-                          >
-                            {submittingId === req.id ? (
-                              <>
-                                <RefreshCw className="h-4 w-4 animate-spin" />
-                                Submitting Proof...
-                              </>
-                            ) : (
-                              <>
-                                <Send className="h-4 w-4" />
-                                Submit Proof Answers
-                              </>
-                            )}
-                          </button>
-                        </div>
+                      <h3 style={{ font: '800 18px "Manrope"', color: 'var(--navy)', margin: 0 }}>
+                        {req.item.name}
+                      </h3>
+                      {req.item.storageLocation && (
+                        <span style={{ fontSize: '11px', color: 'var(--teal)', fontWeight: 700, marginTop: '2px', display: 'block' }}>
+                          Locker Storage: {req.item.storageLocation}
+                        </span>
                       )}
                     </div>
 
+                    <div>
+                      {getStatusBadge(req.status)}
+                    </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
 
-        </main>
-      </div>
+                  {/* Admin Notes */}
+                  {req.adminNotes && (
+                    <div
+                      style={{
+                        padding: '12px 24px',
+                        background: 'var(--coral-soft)',
+                        borderBottom: '1px solid var(--line)',
+                        fontSize: '11px',
+                        color: 'var(--coral)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        fontWeight: 600,
+                      }}
+                    >
+                      <AlertCircle className="h-4 w-4" />
+                      <span><strong>Officer Note:</strong> {req.adminNotes}</span>
+                    </div>
+                  )}
+
+                  {/* Feedback Message */}
+                  {feedback?.id === req.id && (
+                    <div
+                      style={{
+                        margin: '16px 24px 0',
+                        padding: '12px 16px',
+                        borderRadius: '10px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        background: feedback.error ? 'var(--coral-soft)' : 'var(--teal-soft)',
+                        color: feedback.error ? 'var(--coral)' : 'var(--teal)',
+                      }}
+                    >
+                      {feedback.error ? feedback.error : feedback.success}
+                    </div>
+                  )}
+
+                  {/* Questions List */}
+                  <div style={{ padding: '24px', display: 'grid', gap: '18px' }}>
+                    {req.questions.map((q, idx) => {
+                      const currentValue = answersState[req.id]?.[q.id] ?? (q.answerText || '');
+
+                      return (
+                        <div
+                          key={q.id}
+                          style={{
+                            background: '#f8f4ee',
+                            padding: '16px',
+                            borderRadius: '12px',
+                            border: '1px solid var(--line)',
+                          }}
+                        >
+                          <label
+                            style={{
+                              display: 'block',
+                              fontSize: '12px',
+                              fontWeight: 800,
+                              color: 'var(--navy)',
+                              marginBottom: '8px',
+                            }}
+                          >
+                            <span style={{ color: 'var(--purple)', marginRight: '6px' }}>Q{idx + 1}.</span>
+                            {q.questionText}
+                          </label>
+
+                          {canEdit ? (
+                            <textarea
+                              rows={2}
+                              value={currentValue}
+                              onChange={(e) => handleAnswerChange(req.id, q.id, e.target.value)}
+                              placeholder="Provide identifying color, unique scratches, engravings, internal contents..."
+                              style={{
+                                width: '100%',
+                                padding: '10px 12px',
+                                borderRadius: '8px',
+                                border: '1px solid var(--line)',
+                                background: 'var(--paper)',
+                                fontSize: '11px',
+                                outline: 0,
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                padding: '10px 12px',
+                                borderRadius: '8px',
+                                background: 'var(--paper)',
+                                border: '1px solid var(--line)',
+                                fontSize: '11px',
+                                color: 'var(--ink)',
+                                fontStyle: 'italic',
+                              }}
+                            >
+                              {q.answerText || 'No answer recorded.'}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {canEdit && (
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '12px', borderTop: '1px solid var(--line)' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleSubmit(req)}
+                          disabled={submittingId === req.id}
+                          className="button button-found"
+                        >
+                          <Send className="h-4 w-4" />
+                          {submittingId === req.id ? 'Submitting Proof...' : 'Submit Proof Answers'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+      </main>
+
+      <Footer />
     </div>
   );
 }

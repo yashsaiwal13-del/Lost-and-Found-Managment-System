@@ -24,7 +24,7 @@ export async function getStudentReports(): Promise<StudentReport[]> {
       include: {
         lostMatches: {
           where: {
-            status: { in: [MatchStatus.CONFIRMED, MatchStatus.SUGGESTED] },
+            status: MatchStatus.CONFIRMED,
           },
           include: {
             foundItem: {
@@ -77,7 +77,6 @@ export async function getStudentReports(): Promise<StudentReport[]> {
     return items.map((item) => {
       // Find confirmed match if exists
       const confirmedMatch = item.lostMatches.find((m) => m.status === MatchStatus.CONFIRMED);
-      const suggestedMatchesCount = item.lostMatches.length;
 
       // Status mapping
       let statusFormat: ItemStatus = 'open';
@@ -125,8 +124,8 @@ export async function getStudentReports(): Promise<StudentReport[]> {
         image: item.image,
         storageLocation: item.storageLocation,
         status: statusFormat,
-        matchesCount: confirmedMatch ? 1 : suggestedMatchesCount > 0 ? suggestedMatchesCount : 0,
-        matchedItemId: confirmedMatch?.foundItemId || item.lostMatches[0]?.foundItemId || undefined,
+        matchesCount: confirmedMatch ? 1 : 0,
+        matchedItemId: confirmedMatch?.foundItemId || undefined,
         connectedMatch: connectedMatchData,
         hasPendingVerification: item.verificationRequests.length > 0,
       };

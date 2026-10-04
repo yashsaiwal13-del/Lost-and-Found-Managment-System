@@ -2,1472 +2,1362 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { 
-  ShieldAlert, 
+  GitCompare, 
+  FileCheck2, 
+  Package, 
   Search, 
+  Check, 
+  X, 
+  Sparkles, 
+  ShieldCheck, 
   MapPin, 
   Calendar, 
   Tag, 
-  Building2, 
-  CheckCircle2, 
-  Clock, 
+  Layers, 
+  RefreshCw, 
   AlertCircle, 
-  X,
-  Users,
+  CheckCircle2, 
+  User, 
   FileText,
-  ShieldCheck,
-  Layers,
-  ArrowUpDown,
-  Filter,
-  RefreshCw,
-  PlusCircle,
-  TrendingUp,
-  MessageSquare,
-  Archive,
-  ArchiveRestore,
-  History,
-  Send,
-  HelpCircle,
-  PackageCheck,
-  AlertTriangle,
-  ExternalLink,
+  SlidersHorizontal,
   ChevronRight,
-  UserCheck,
-  Settings,
-  GitCompare
+  HelpCircle,
+  Clock,
+  ArrowRight
 } from 'lucide-react';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
-import { CATEGORIES } from '@/lib/constants';
+import { 
+  getSuggestedMatches, 
+  getConfirmedMatches, 
+  getActiveReportsForManualMatching, 
+  acceptSuggestedMatch, 
+  dismissSuggestedMatch, 
+  connectReportsManually,
+  SuggestedMatchEntry,
+  ConfirmedMatchEntry
+} from '@/app/actions/matching';
+import { getAdminClaims, approveClaim, rejectClaim, confirmHandover } from '@/app/actions/claims';
+import { getAllAdminItems, AdminCampusItem } from '@/app/actions/getAllItems';
 import { getCurrentUser } from '@/app/actions/auth';
-import { getAllAdminItems } from '@/app/actions/getAllItems';
-import { changeItemStatus, toggleArchiveItem } from '@/app/actions/items';
-import { confirmHandover } from '@/app/actions/claims';
-import { getAdminStats, AdminStatsData } from '@/app/actions/adminStats';
-import { archiveReport, restoreReport } from '@/app/actions/moderation';
+import { CATEGORIES } from '@/lib/constants';
+import { ImageViewerModal } from '@/components/ui/ImageViewerModal';
 
-export default function AdminDashboardPage() {
+export default function AdminPortalPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const initialTab = (searchParams?.get('tab') as 'matches' | 'claims' | 'custody') || 'matches';
+  
+  const [activeTab, setActiveTab] = useState<'matches' | 'claims' | 'custody'>(initialTab);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'items' | 'verifications' | 'students' | 'audit'>('items');
-  
-  // Data states
-  const [items, setItems] = useState<any[]>([]);
-  const [students, setStudents] = useState<any[]>([]);
-  const [verifications, setVerifications] = useState<any[]>([]);
-  const [auditLogs, setAuditLogs] = useState<any[]>([]);
-  const [adminStats, setAdminStats] = useState<AdminStatsData | null>(null);
-  
   const [loading, setLoading] = useState(true);
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [fullImage, setFullImage] = useState<{ url: string; title: string; subtitle: string } | null>(null);
+
+  // Data states
+  const [suggestedMatches, setSuggestedMatches] = useState<SuggestedMatchEntry[]>([]);
+  const [confirmedMatches, setConfirmedMatches] = useState<ConfirmedMatchEntry[]>([]);
+  const [claims, setClaims] = useState<any[]>([]);
+  const [custodyItems, setCustodyItems] = useState<AdminCampusItem[]>([]);
+  
+  // Manual matching active reports
+  const [activeLostReports, setActiveLostReports] = useState<any[]>([]);
+  const [activeFoundReports, setActiveFoundReports] = useState<any[]>([]);
+  const [selectedLostId, setSelectedLostId] = useState<string | null>(null);
+  const [selectedFoundId, setSelectedFoundId] = useState<string | null>(null);
+  const [manualNotes, setManualNotes] = useState('');
+  const [submittingManual, setSubmittingManual] = useState(false);
 
   // Filters
-  const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'lost' | 'found'>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('All');
-  const [categoryFilter, setCategoryFilter] = useState<string>('All');
-  const [showArchived, setShowArchived] = useState(false);
+  const [lostSearch, setLostSearch] = useState('');
+  const [foundSearch, setFoundSearch] = useState('');
+  const [lostCategory, setLostCategory] = useState('All');
+  const [foundCategory, setFoundCategory] = useState('All');
+  const [claimsSearch, setClaimsSearch] = useState('');
+  const [custodySearch, setCustodySearch] = useState('');
 
-  // Modals state
-  // 1. Send Questions Modal
-  const [sendModalOpen, setSendModalOpen] = useState(false);
-  const [selectedItemForQuestions, setSelectedItemForQuestions] = useState<any>(null);
-  const [selectedStudentId, setSelectedStudentId] = useState('');
-  const [questionsList, setQuestionsList] = useState<string[]>([
-    'What brand, color shade, or distinctive scratch marks does this item have?',
-    'Can you describe any unique items or papers contained inside / attached?',
-    'Where exactly on campus was this item lost or last seen?'
-  ]);
-  const [adminNotes, setAdminNotes] = useState('');
-  const [sendingQuestions, setSendingQuestions] = useState(false);
+  // Reject modal state
+  const [rejectModalClaim, setRejectModalClaim] = useState<any | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [submittingReject, setSubmittingReject] = useState(false);
 
-  // 2. Review Decision Modal
-  const [decisionModalOpen, setDecisionModalOpen] = useState(false);
-  const [selectedVerification, setSelectedVerification] = useState<any>(null);
-  const [decisionAction, setDecisionAction] = useState<'VERIFY' | 'CLARIFY' | 'REJECT' | 'HANDOVER'>('VERIFY');
-  const [decisionNotes, setDecisionNotes] = useState('');
-  const [rejectionReason, setRejectionReason] = useState('');
-  const [handoverRecipientId, setHandoverRecipientId] = useState('');
-  const [submittingDecision, setSubmittingDecision] = useState(false);
+  // Handover modal state
+  const [handoverModalItem, setHandoverModalItem] = useState<any | null>(null);
+  const [handoverRecipient, setHandoverRecipient] = useState('');
+  const [handoverNotes, setHandoverNotes] = useState('');
+  const [submittingHandover, setSubmittingHandover] = useState(false);
 
-  // 3. Archive Modal
-  const [archiveModalOpen, setArchiveModalOpen] = useState(false);
-  const [itemToArchive, setItemToArchive] = useState<any>(null);
-  const [archiveReason, setArchiveReason] = useState('');
-  const [submittingArchive, setSubmittingArchive] = useState(false);
+  // Action in progress state
+  const [actionInProgressId, setActionInProgressId] = useState<string | null>(null);
 
-  // 4. Direct Item Handover Modal
-  const [itemHandoverModalOpen, setItemHandoverModalOpen] = useState(false);
-  const [selectedItemForHandover, setSelectedItemForHandover] = useState<any>(null);
-  const [itemHandoverRecipientId, setItemHandoverRecipientId] = useState('');
-  const [itemHandoverNotes, setItemHandoverNotes] = useState('');
-  const [submittingItemHandover, setSubmittingItemHandover] = useState(false);
+  // Sync tab with URL
+  useEffect(() => {
+    const tabFromUrl = searchParams?.get('tab') as 'matches' | 'claims' | 'custody' | null;
+    if (tabFromUrl && ['matches', 'claims', 'custody'].includes(tabFromUrl)) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [searchParams]);
+
+  const switchTab = (tab: 'matches' | 'claims' | 'custody') => {
+    setActiveTab(tab);
+    router.push(`/admin?tab=${tab}`);
+  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4500);
+    setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // Load all data
-  const loadAdminData = async () => {
+  // Load live data from database
+  const loadData = async () => {
     setLoading(true);
     try {
-      // 1. Live Admin Stats directly from Prisma via Server Action
-      const stats = await getAdminStats();
-      if (stats) {
-        setAdminStats(stats);
-      }
+      const [u, suggested, confirmed, activeReports, adminClaims, allItems] = await Promise.all([
+        getCurrentUser(),
+        getSuggestedMatches(),
+        getConfirmedMatches(),
+        getActiveReportsForManualMatching(),
+        getAdminClaims(),
+        getAllAdminItems({ includeArchived: false }),
+      ]);
 
-      // 2. Items via Server Action
-      const allItems = await getAllAdminItems({ includeArchived: true });
-      if (allItems) {
-        setItems(allItems);
-      }
-
-      // 3. Students
-      const studentsRes = await fetch('/api/admin/students');
-      if (studentsRes.ok) {
-        const d = await studentsRes.json();
-        setStudents(d.students || []);
-      }
-
-      // 4. Verifications
-      const verifRes = await fetch('/api/verification/student');
-      if (verifRes.ok) {
-        const d = await verifRes.json();
-        setVerifications(d.requests || []);
-      }
-
-      // 5. Audit Logs
-      const auditRes = await fetch('/api/admin/audit-logs?limit=50');
-      if (auditRes.ok) {
-        const d = await auditRes.json();
-        setAuditLogs(d.auditLogs || []);
-      }
-
-      const u = await getCurrentUser();
       if (u) setCurrentUser(u);
-    } catch (err) {
-      console.error('Failed to fetch admin console data:', err);
+      setSuggestedMatches(suggested || []);
+      setConfirmedMatches(confirmed || []);
+      setActiveLostReports(activeReports.lostReports || []);
+      setActiveFoundReports(activeReports.foundReports || []);
+      setClaims(adminClaims || []);
+      
+      // Custody items: Found items currently logged in custody
+      const foundInCustody = (allItems || []).filter(
+        (i) => i.type?.toUpperCase() === 'FOUND'
+      );
+      setCustodyItems(foundInCustody);
+    } catch (err: any) {
+      console.error('Failed to load admin portal data:', err);
+      showToast('Error loading live data from database.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadAdminData();
+    loadData();
   }, []);
 
-  // Handle Quick Status Change
-  const handleStatusChange = async (itemId: string, newStatus: string) => {
-    setUpdatingId(itemId);
+  // Match review actions
+  const handleAcceptMatch = async (matchId: string) => {
+    setActionInProgressId(matchId);
     try {
-      const res = await changeItemStatus(itemId, newStatus);
+      const res = await acceptSuggestedMatch(matchId, 'Confirmed connection by Administrator');
       if (res.success) {
-        setItems((prev) =>
-          prev.map((i) => (i.id === itemId ? { ...i, status: newStatus } : i))
-        );
-        showToast(`Status for item #${itemId} updated to ${newStatus}.`);
-        loadAdminData();
+        showToast('Connection confirmed. Both student parties notified.');
+        setSuggestedMatches((prev) => prev.filter((m) => m.id !== matchId));
+        loadData();
       } else {
-        alert(res.error || 'Failed to update item status.');
+        alert(res.error || 'Failed to confirm match connection.');
       }
     } catch (err: any) {
-      console.error('Status update error:', err);
-      alert('Network error while updating status.');
+      alert(err.message || 'Error confirming match connection.');
     } finally {
-      setUpdatingId(null);
+      setActionInProgressId(null);
     }
   };
 
-  // Handle Archive / Restore
-  const handleToggleArchive = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!itemToArchive) return;
-
+  const handleDismissMatch = async (matchId: string) => {
+    setActionInProgressId(matchId);
     try {
-      setSubmittingArchive(true);
-      const isCurrentlyArchived = itemToArchive.isArchived;
-      const res = isCurrentlyArchived
-        ? await restoreReport(itemToArchive.id)
-        : await archiveReport(itemToArchive.id, archiveReason || 'Archived by administrator');
-
-      if (!res.success) {
-        throw new Error(res.error || 'Failed to update item archive state.');
+      const res = await dismissSuggestedMatch(matchId);
+      if (res.success) {
+        showToast('Suggested match dismissed.');
+        setSuggestedMatches((prev) => prev.filter((m) => m.id !== matchId));
+        loadData();
+      } else {
+        alert(res.error || 'Failed to dismiss match.');
       }
-
-      setArchiveModalOpen(false);
-      setItemToArchive(null);
-      setArchiveReason('');
-      showToast(isCurrentlyArchived ? 'Report restored to active registry.' : 'Report archived safely.');
-      loadAdminData();
     } catch (err: any) {
-      alert(err.message || 'Error archiving report.');
+      alert(err.message || 'Error dismissing match.');
     } finally {
-      setSubmittingArchive(false);
+      setActionInProgressId(null);
     }
   };
 
-  // Send Questions Form
-  const handleSendQuestions = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedItemForQuestions || !selectedStudentId) {
-      alert('Please select both an item and a student.');
+  // Manual connect action
+  const handleManualConnect = async () => {
+    if (!selectedLostId || !selectedFoundId) {
+      alert('Please select both a lost report and a found report to connect.');
       return;
     }
-
-    const filteredQs = questionsList.filter((q) => q.trim().length > 0);
-    if (filteredQs.length === 0) {
-      alert('Please provide at least one verification question.');
-      return;
-    }
-
+    setSubmittingManual(true);
     try {
-      setSendingQuestions(true);
-      const res = await fetch('/api/verification/questions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          itemId: selectedItemForQuestions.id,
-          studentId: selectedStudentId,
-          questions: filteredQs,
-          notes: adminNotes || undefined,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to send verification questions.');
-      }
-
-      setSendModalOpen(false);
-      setSelectedItemForQuestions(null);
-      setSelectedStudentId('');
-      setAdminNotes('');
-      showToast('Verification questions dispatched to student account.');
-      loadAdminData();
-    } catch (err: any) {
-      alert(err.message || 'Error sending questions.');
-    } finally {
-      setSendingQuestions(false);
-    }
-  };
-
-  // Submit Decision
-  const handleDecisionSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedVerification) return;
-
-    try {
-      setSubmittingDecision(true);
-      const payload: any = { action: decisionAction };
-      if (decisionAction === 'REJECT') {
-        if (!rejectionReason.trim()) {
-          alert('Please enter a rejection reason.');
-          setSubmittingDecision(false);
-          return;
-        }
-        payload.rejectionReason = rejectionReason;
-      }
-      if (decisionNotes.trim()) {
-        payload.adminNotes = decisionNotes;
-      }
-      if (decisionAction === 'HANDOVER') {
-        payload.recipientStudentId = handoverRecipientId || selectedVerification.studentId;
-      }
-
-      const res = await fetch(`/api/verification/${selectedVerification.id}/decision`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to process decision.');
-      }
-
-      setDecisionModalOpen(false);
-      setSelectedVerification(null);
-      setDecisionNotes('');
-      setRejectionReason('');
-      showToast(`Decision recorded: ${decisionAction}`);
-      loadAdminData();
-    } catch (err: any) {
-      alert(err.message || 'Error recording verification decision.');
-    } finally {
-      setSubmittingDecision(false);
-    }
-  };
-
-  // Direct Handover Confirmation (Intermediate VERIFIED -> RESOLVED)
-  const handleDirectHandoverSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedItemForHandover) return;
-    try {
-      setSubmittingItemHandover(true);
-      const res = await confirmHandover(
-        selectedItemForHandover.id,
-        itemHandoverRecipientId || selectedItemForHandover.reportedById || undefined,
-        itemHandoverNotes || undefined
+      const res = await connectReportsManually(
+        selectedLostId,
+        selectedFoundId,
+        manualNotes || 'Manual pairing executed by Administrator'
       );
-
-      if (!res.success) {
-        throw new Error(res.error || 'Failed to authorize item handover.');
+      if (res.success) {
+        showToast('Reports linked successfully. Notification sent to student.');
+        setSelectedLostId(null);
+        setSelectedFoundId(null);
+        setManualNotes('');
+        loadData();
+      } else {
+        alert(res.error || 'Failed to link reports.');
       }
-
-      setItemHandoverModalOpen(false);
-      setSelectedItemForHandover(null);
-      setItemHandoverRecipientId('');
-      setItemHandoverNotes('');
-      showToast(`Item #${selectedItemForHandover.id} officially marked as RESOLVED and handed over.`);
-      loadAdminData();
     } catch (err: any) {
-      alert(err.message || 'Error authorizing item handover.');
+      alert(err.message || 'Error linking reports.');
     } finally {
-      setSubmittingItemHandover(false);
+      setSubmittingManual(false);
     }
   };
 
-  // Filter items
-  const filteredItems = useMemo(() => {
-    return items.filter((item) => {
-      if (!showArchived && item.isArchived) return false;
-      if (showArchived && !item.isArchived) return false;
-      if (typeFilter !== 'all' && item.type?.toLowerCase() !== typeFilter) return false;
-      if (statusFilter !== 'All' && item.status?.toUpperCase() !== statusFilter.toUpperCase()) return false;
-      if (categoryFilter !== 'All' && item.category !== categoryFilter) return false;
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+  // Claim actions
+  const handleApproveClaim = async (claimId: string) => {
+    setActionInProgressId(claimId);
+    try {
+      const res = await approveClaim(claimId);
+      if (res.success) {
+        showToast('Claim approved. Item marked VERIFIED and ready for collection.');
+        loadData();
+      } else {
+        alert(res.error || 'Failed to approve claim.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error approving claim.');
+    } finally {
+      setActionInProgressId(null);
+    }
+  };
+
+  const handleRejectClaimSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rejectModalClaim) return;
+    if (!rejectReason.trim()) {
+      alert('Please provide a specific rejection reason.');
+      return;
+    }
+
+    setSubmittingReject(true);
+    try {
+      const res = await rejectClaim(rejectModalClaim.id, rejectReason.trim());
+      if (res.success) {
+        showToast('Claim rejected. Student notified with reason.');
+        setRejectModalClaim(null);
+        setRejectReason('');
+        loadData();
+      } else {
+        alert(res.error || 'Failed to reject claim.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error rejecting claim.');
+    } finally {
+      setSubmittingReject(false);
+    }
+  };
+
+  // Handover action
+  const handleHandoverSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!handoverModalItem) return;
+
+    setSubmittingHandover(true);
+    try {
+      const res = await confirmHandover(
+        handoverModalItem.id,
+        handoverRecipient || handoverModalItem.reportedById || undefined,
+        handoverNotes || 'Item officially handed over at Campus Safety Desk'
+      );
+      if (res.success) {
+        showToast(`Item #${handoverModalItem.id} officially marked as RESOLVED and handed over.`);
+        setHandoverModalItem(null);
+        setHandoverRecipient('');
+        setHandoverNotes('');
+        loadData();
+      } else {
+        alert(res.error || 'Failed to confirm item handover.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error confirming item handover.');
+    } finally {
+      setSubmittingHandover(false);
+    }
+  };
+
+  // Filtered lists for manual matching
+  const filteredLost = useMemo(() => {
+    return activeLostReports.filter((item) => {
+      if (lostCategory !== 'All' && item.category !== lostCategory) return false;
+      if (lostSearch.trim()) {
+        const q = lostSearch.toLowerCase();
         return (
-          item.name?.toLowerCase().includes(q) ||
-          item.description?.toLowerCase().includes(q) ||
-          item.location?.toLowerCase().includes(q) ||
-          item.id?.toLowerCase().includes(q)
+          item.name.toLowerCase().includes(q) ||
+          item.description.toLowerCase().includes(q) ||
+          item.location.toLowerCase().includes(q) ||
+          item.reportedBy?.name?.toLowerCase().includes(q)
         );
       }
       return true;
     });
-  }, [items, typeFilter, statusFilter, categoryFilter, searchQuery, showArchived]);
+  }, [activeLostReports, lostCategory, lostSearch]);
 
-  // Metrics
-  const metrics = useMemo(() => {
-    const activeItems = items.filter((i) => !i.isArchived);
-    const lostCount = activeItems.filter((i) => i.type === 'LOST').length;
-    const foundCount = activeItems.filter((i) => i.type === 'FOUND').length;
-    const pendingVerifs = verifications.filter(
-      (v) => v.status === 'PENDING' || v.status === 'ANSWERS_SUBMITTED' || v.status === 'CLARIFICATION_REQUESTED'
-    ).length;
-    const returnedItems = items.filter(
-      (i) => i.status === 'RESOLVED' || i.status === 'ITEM_RETURNED'
-    ).length;
+  const filteredFound = useMemo(() => {
+    return activeFoundReports.filter((item) => {
+      if (foundCategory !== 'All' && item.category !== foundCategory) return false;
+      if (foundSearch.trim()) {
+        const q = foundSearch.toLowerCase();
+        return (
+          item.name.toLowerCase().includes(q) ||
+          item.description.toLowerCase().includes(q) ||
+          item.location.toLowerCase().includes(q) ||
+          item.reportedBy?.name?.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [activeFoundReports, foundCategory, foundSearch]);
 
-    return {
-      totalStudents: students.length,
-      activeItemsCount: activeItems.length,
-      lostCount,
-      foundCount,
-      pendingVerifs,
-      returnedItems,
-      archivedCount: items.filter((i) => i.isArchived).length,
-    };
-  }, [items, students, verifications]);
+  // Filtered claims
+  const filteredClaims = useMemo(() => {
+    return claims.filter((c) => {
+      if (claimsSearch.trim()) {
+        const q = claimsSearch.toLowerCase();
+        return (
+          c.itemTitle?.toLowerCase().includes(q) ||
+          c.claimantName?.toLowerCase().includes(q) ||
+          c.studentId?.toLowerCase().includes(q) ||
+          c.status?.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [claims, claimsSearch]);
+
+  // Filtered custody items
+  const filteredCustody = useMemo(() => {
+    return custodyItems.filter((i) => {
+      if (custodySearch.trim()) {
+        const q = custodySearch.toLowerCase();
+        return (
+          i.name?.toLowerCase().includes(q) ||
+          i.category?.toLowerCase().includes(q) ||
+          i.location?.toLowerCase().includes(q) ||
+          i.storageLocation?.toLowerCase().includes(q) ||
+          i.id?.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [custodyItems, custodySearch]);
+
+  const selectedLostItem = useMemo(
+    () => activeLostReports.find((i) => i.id === selectedLostId) || null,
+    [activeLostReports, selectedLostId]
+  );
+  const selectedFoundItem = useMemo(
+    () => activeFoundReports.find((i) => i.id === selectedFoundId) || null,
+    [activeFoundReports, selectedFoundId]
+  );
+
+  const pendingClaimsCount = claims.filter((c) => c.status === 'pending').length;
+  const activeInCustodyCount = custodyItems.filter(
+    (i) => i.status !== 'RESOLVED' && i.status !== 'ITEM_RETURNED'
+  ).length;
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col">
-      <Navbar />
+    <>
+      {/* Topbar */}
+      <div className="admin-topbar">
+        <div>
+          <span className="match-kicker">Campus Safety &amp; Asset Control</span>
+          <h1>Admin Portal</h1>
+          <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '13px' }}>
+            Review potential matches, assess ownership claims, and track custody.
+          </p>
+        </div>
 
-      {/* Admin Operations Header */}
-      <div className="bg-slate-900 text-white border-b border-slate-800 shadow-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            
-            {/* System Admin Title */}
-            <div className="flex items-center gap-3.5">
-              <div className="h-12 w-12 rounded-2xl bg-purple-600 flex items-center justify-center text-white font-bold shadow-lg shadow-purple-500/30 shrink-0 border border-purple-400/30">
-                <ShieldAlert className="h-7 w-7" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-purple-400 bg-purple-950 px-2.5 py-0.5 rounded-full border border-purple-800">
-                    Administrator Console
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800 px-2 py-0.5 rounded-full">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Live System Active
-                  </span>
-                </div>
-                <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight mt-0.5">
-                  Campus Lost &amp; Found Administration
-                </h1>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Logged in as: <span className="text-slate-200 font-semibold">{currentUser?.name || 'Administrator'}</span> ({currentUser?.email || 'admin@campus.edu'})
-                </p>
-              </div>
-            </div>
+        <div>
+          <div className="verified">
+            <ShieldCheck className="h-4 w-4" />
+            <span>Live Verification Engine</span>
+          </div>
 
-            {/* Top Navigation & Quick Actions */}
-            <div className="flex items-center gap-2.5 self-start md:self-auto flex-wrap">
-              <Link
-                href="/admin/students"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-purple-600 hover:bg-purple-700 text-white shadow-xs transition-all"
-              >
-                <Users className="h-4 w-4" />
-                Student Directory
-              </Link>
-              <Link
-                href="/admin/matches"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-all"
-              >
-                <GitCompare className="h-4 w-4" />
-                Match &amp; Return
-              </Link>
-              <Link
-                href="/admin/verification"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 shadow-xs transition-all"
-              >
-                <HelpCircle className="h-4 w-4 text-purple-400" />
-                Verification Hub
-              </Link>
-              <Link
-                href="/admin/audit-log"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 shadow-xs transition-all"
-              >
-                <History className="h-4 w-4 text-purple-400" />
-                Audit Trail
-              </Link>
-              <Link
-                href="/admin/settings"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 shadow-xs transition-all"
-              >
-                <Settings className="h-4 w-4 text-purple-400" />
-                Admin Settings
-              </Link>
-              <Link
-                href="/security"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-all"
-              >
-                <ShieldCheck className="h-4 w-4" />
-                Safety Desk
-              </Link>
-              <button
-                onClick={loadAdminData}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 border border-slate-700 transition-colors cursor-pointer"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
-            </div>
-
+          <div style={{ display: 'flex', gap: '6px', background: 'var(--paper)', padding: '4px', borderRadius: '10px', border: '1px solid var(--line)' }}>
+            <button
+              onClick={() => switchTab('matches')}
+              className={`button ${activeTab === 'matches' ? 'button-admin' : 'button-ghost'}`}
+              style={{ minHeight: '36px', padding: '0 12px', fontSize: '11px' }}
+            >
+              Match &amp; Return ({suggestedMatches.length})
+            </button>
+            <button
+              onClick={() => switchTab('claims')}
+              className={`button ${activeTab === 'claims' ? 'button-admin' : 'button-ghost'}`}
+              style={{ minHeight: '36px', padding: '0 12px', fontSize: '11px' }}
+            >
+              Claims Review ({pendingClaimsCount})
+            </button>
+            <button
+              onClick={() => switchTab('custody')}
+              className={`button ${activeTab === 'custody' ? 'button-admin' : 'button-ghost'}`}
+              style={{ minHeight: '36px', padding: '0 12px', fontSize: '11px' }}
+            >
+              Custody Locker ({activeInCustodyCount})
+            </button>
+            <button
+              onClick={loadData}
+              title="Refresh database records"
+              className="button button-ghost"
+              style={{ minHeight: '36px', width: '36px', padding: 0, display: 'grid', placeItems: 'center' }}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Main Container */}
-      <main className="flex-1 py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full space-y-6">
-        
-        {/* Toast Alert */}
-        {toastMessage && (
-          <div className="bg-emerald-600 text-white p-4 rounded-2xl shadow-lg flex items-center justify-between text-xs sm:text-sm font-semibold animate-in fade-in">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 shrink-0" />
-              <span>{toastMessage}</span>
-            </div>
-            <button
-              onClick={() => setToastMessage(null)}
-              className="text-white/80 hover:text-white p-1 rounded-lg"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        )}
-
-        {/* 4 Admin Metric Cards — Driven Exclusively by Live Prisma Queries via getAdminStats() */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Active Reports</span>
-              <div className="h-9 w-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                <Layers className="h-5 w-5" />
-              </div>
-            </div>
-            <div className="text-3xl font-black text-slate-900 tracking-tight">
-              {adminStats ? adminStats.totalLostReports + adminStats.totalFoundReports : metrics.activeItemsCount}
-            </div>
-            <p className="text-[11px] text-slate-500 mt-2 font-medium">
-              {adminStats
-                ? `${adminStats.totalLostReports} Lost • ${adminStats.totalFoundReports} Found (${adminStats.reportsAwaitingReview} Awaiting Review)`
-                : `${metrics.lostCount} Lost • ${metrics.foundCount} Found`}
-            </p>
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Pending Inquiries</span>
-              <div className="h-9 w-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-                <HelpCircle className="h-5 w-5" />
-              </div>
-            </div>
-            <div className="text-3xl font-black text-amber-600 tracking-tight">
-              {adminStats ? adminStats.pendingVerificationRequests + adminStats.answeredVerificationRequests : metrics.pendingVerifs}
-            </div>
-            <p className="text-[11px] text-slate-500 mt-2 font-medium">
-              {adminStats
-                ? `${adminStats.answeredVerificationRequests} answered awaiting review • ${adminStats.acceptedVerificationsCount} accepted`
-                : 'Awaiting student answers or review'}
-            </p>
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Handed Over Items</span>
-              <div className="h-9 w-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                <PackageCheck className="h-5 w-5" />
-              </div>
-            </div>
-            <div className="text-3xl font-black text-emerald-600 tracking-tight">
-              {adminStats ? adminStats.resolvedItemsCount : metrics.returnedItems}
-            </div>
-            <p className="text-[11px] text-slate-500 mt-2 font-medium">
-              Securely released to verified owners
-            </p>
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Registered Students</span>
-              <div className="h-9 w-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
-                <Users className="h-5 w-5" />
-              </div>
-            </div>
-            <div className="text-3xl font-black text-purple-600 tracking-tight">
-              {adminStats ? adminStats.totalStudents : metrics.totalStudents}
-            </div>
-            <p className="text-[11px] text-slate-500 mt-2 font-medium">
-              {adminStats
-                ? `${adminStats.studentsActiveLast7Days} active in last 7d • ${adminStats.studentsWithLogin} logged in`
-                : 'Searchable campus directory'}
-            </p>
-          </div>
-        </div>
-
-        {/* Console Tabs Navigation */}
-        <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('items')}
-            className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all ${
-              activeTab === 'items'
-                ? 'bg-purple-600 text-white shadow-sm'
-                : 'bg-white text-slate-600 hover:bg-slate-200/70 border border-slate-200'
-            }`}
-          >
-            <Layers className="h-4 w-4" />
-            Registry &amp; Status Controls ({items.length})
-          </button>
-
-          <button
-            onClick={() => setActiveTab('verifications')}
-            className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all ${
-              activeTab === 'verifications'
-                ? 'bg-purple-600 text-white shadow-sm'
-                : 'bg-white text-slate-600 hover:bg-slate-200/70 border border-slate-200'
-            }`}
-          >
-            <HelpCircle className="h-4 w-4" />
-            Verification Center ({verifications.length})
-            {metrics.pendingVerifs > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-400 text-slate-900 font-extrabold">
-                {metrics.pendingVerifs}
+      {/* ========================================================= */}
+      {/* TAB 1: MATCH & RETURN */}
+      {/* ========================================================= */}
+      {activeTab === 'matches' && (
+        <section>
+          {/* Summary Bar */}
+          <div className="admin-summary">
+            <div>
+              <span>
+                <GitCompare className="h-4 w-4" />
               </span>
-            )}
-          </button>
+              <p>
+                <strong>Potential Match Queue ({suggestedMatches.length})</strong>
+                <small>Confidence scoring &amp; attribute alignment analysis</small>
+              </p>
+            </div>
+            <span>
+              {suggestedMatches.length > 0
+                ? `${suggestedMatches.length} candidate match${suggestedMatches.length > 1 ? 'es' : ''} awaiting review`
+                : 'All match queues clear'}
+            </span>
+          </div>
 
-          <button
-            onClick={() => setActiveTab('students')}
-            className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all ${
-              activeTab === 'students'
-                ? 'bg-purple-600 text-white shadow-sm'
-                : 'bg-white text-slate-600 hover:bg-slate-200/70 border border-slate-200'
-            }`}
-          >
-            <Users className="h-4 w-4" />
-            Student Directory ({students.length})
-          </button>
+          {/* Suggested Match Cards */}
+          {suggestedMatches.length > 0 ? (
+            <div style={{ display: 'grid', gap: '20px' }}>
+              {suggestedMatches.map((match) => (
+                <article key={match.id} className="admin-match-card">
+                  <div className="admin-match-head">
+                    <div>
+                      <span className="confidence">
+                        <Sparkles className="h-3 w-3" />
+                        Algorithmic Match Suggestion
+                      </span>
+                      <h2>
+                        {match.lostItem.name} ↔ {match.foundItem.name}
+                      </h2>
+                      <p>
+                        Match score: {match.similarityScore}% · Lost #{match.lostItem.id} vs Found #{match.foundItem.id}
+                      </p>
+                    </div>
 
-          <button
-            onClick={() => setActiveTab('audit')}
-            className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all ${
-              activeTab === 'audit'
-                ? 'bg-purple-600 text-white shadow-sm'
-                : 'bg-white text-slate-600 hover:bg-slate-200/70 border border-slate-200'
-            }`}
-          >
-            <History className="h-4 w-4" />
-            Security Audit Trail ({auditLogs.length})
-          </button>
-        </div>
+                    <div className="confidence-ring">
+                      <strong>{match.similarityScore}%</strong>
+                      <small>Confidence</small>
+                    </div>
+                  </div>
 
-        {/* TAB 1: REGISTRY & ITEMS */}
-        {activeTab === 'items' && (
-          <section className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="p-6 border-b border-slate-100 space-y-4">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-                    Campus Item Management &amp; Status Controls
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Update statuses, ask verification proof questions, or archive suspicious/duplicate reports.
-                  </p>
-                </div>
+                  <div className="comparison">
+                    {/* Lost Item Column */}
+                    <div className="compare-item lost">
+                      <div className="compare-label">Lost Report</div>
+                      <div className="compare-title">
+                        {match.lostItem.image ? (
+                          <div
+                            onClick={() =>
+                              setFullImage({
+                                url: match.lostItem.image!,
+                                title: match.lostItem.name,
+                                subtitle: `Lost Report · Ref #${match.lostItem.id} · Reported by ${match.lostItem.reportedBy?.name || 'Student'}`,
+                              })
+                            }
+                            title="Click to view full image"
+                            style={{
+                              width: '46px',
+                              height: '46px',
+                              borderRadius: '8px',
+                              overflow: 'hidden',
+                              cursor: 'pointer',
+                              border: '1px solid var(--line)',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <img
+                              src={match.lostItem.image}
+                              alt={match.lostItem.name}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                          </div>
+                        ) : (
+                          <span>
+                            <Sparkles className="h-5 w-5" />
+                          </span>
+                        )}
+                        <div>
+                          <h3>{match.lostItem.name}</h3>
+                          <p>Ref #{match.lostItem.id} · {match.lostItem.category}</p>
+                          {match.lostItem.image && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setFullImage({
+                                  url: match.lostItem.image!,
+                                  title: match.lostItem.name,
+                                  subtitle: `Lost Report · Ref #${match.lostItem.id}`,
+                                })
+                              }
+                              style={{
+                                border: 0,
+                                background: 'none',
+                                color: 'var(--coral)',
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                padding: 0,
+                                marginTop: '2px',
+                              }}
+                            >
+                              Examine Photo ↗
+                            </button>
+                          )}
+                        </div>
+                      </div>
 
-                {/* Type & Archive Toggles */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    onClick={() => setShowArchived(!showArchived)}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border transition-colors ${
-                      showArchived
-                        ? 'bg-amber-100 text-amber-900 border-amber-300'
-                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Archive className="h-3.5 w-3.5" />
-                    {showArchived ? 'Showing Archived Items' : 'View Archive Vault'}
-                  </button>
+                      <dl>
+                        <div>
+                          <dt>Owner</dt>
+                          <dd>{match.lostItem.reportedBy?.name || 'Student'}</dd>
+                        </div>
+                        <div>
+                          <dt>Location</dt>
+                          <dd>{match.lostItem.location}</dd>
+                        </div>
+                        <div>
+                          <dt>Date Lost</dt>
+                          <dd>
+                            {match.lostItem.date
+                              ? new Date(match.lostItem.date).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                })
+                              : 'Recent'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Notes</dt>
+                          <dd>{match.lostItem.description || 'No additional notes provided.'}</dd>
+                        </div>
+                      </dl>
+                    </div>
 
-                  <div className="inline-flex p-1 bg-slate-100 rounded-xl text-xs font-semibold">
+                    {/* Match Signals Column */}
+                    <div className="signals">
+                      <span>Match signals</span>
+
+                      <div>
+                        <i>✓</i>
+                        <strong>Category: {match.lostItem.category}</strong>
+                        <em></em>
+                      </div>
+
+                      <div>
+                        <i>✓</i>
+                        <strong>
+                          Location:{' '}
+                          {match.lostItem.location === match.foundItem.location
+                            ? 'Exact Zone Match'
+                            : 'Campus Area Proximity'}
+                        </strong>
+                        <em></em>
+                      </div>
+
+                      <div>
+                        <i>✓</i>
+                        <strong>Keyword similarity</strong>
+                        <em></em>
+                      </div>
+
+                      <div>
+                        <i>✓</i>
+                        <strong>Recent timestamp match</strong>
+                        <em></em>
+                      </div>
+                    </div>
+
+                    {/* Found Item Column */}
+                    <div className="compare-item found">
+                      <div className="compare-label">Found Item</div>
+                      <div className="compare-title">
+                        {match.foundItem.image ? (
+                          <div
+                            onClick={() =>
+                              setFullImage({
+                                url: match.foundItem.image!,
+                                title: match.foundItem.name,
+                                subtitle: `Found Item · Ref #${match.foundItem.id} · Stored at ${match.foundItem.storageLocation || 'Locker'}`,
+                              })
+                            }
+                            title="Click to view full image"
+                            style={{
+                              width: '46px',
+                              height: '46px',
+                              borderRadius: '8px',
+                              overflow: 'hidden',
+                              cursor: 'pointer',
+                              border: '1px solid var(--line)',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <img
+                              src={match.foundItem.image}
+                              alt={match.foundItem.name}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                          </div>
+                        ) : (
+                          <span>
+                            <Sparkles className="h-5 w-5" />
+                          </span>
+                        )}
+                        <div>
+                          <h3>{match.foundItem.name}</h3>
+                          <p>Ref #{match.foundItem.id} · Custody Locker</p>
+                          {match.foundItem.image && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setFullImage({
+                                  url: match.foundItem.image!,
+                                  title: match.foundItem.name,
+                                  subtitle: `Found Item · Ref #${match.foundItem.id}`,
+                                })
+                              }
+                              style={{
+                                border: 0,
+                                background: 'none',
+                                color: 'var(--teal)',
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                padding: 0,
+                                marginTop: '2px',
+                              }}
+                            >
+                              Examine Photo ↗
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <dl>
+                        <div>
+                          <dt>Finder</dt>
+                          <dd>{match.foundItem.reportedBy?.name || 'Campus Member'}</dd>
+                        </div>
+                        <div>
+                          <dt>Location</dt>
+                          <dd>{match.foundItem.location}</dd>
+                        </div>
+                        <div>
+                          <dt>Storage</dt>
+                          <dd>{match.foundItem.storageLocation || 'Campus Security Locker'}</dd>
+                        </div>
+                        <div>
+                          <dt>Notes</dt>
+                          <dd>{match.foundItem.description || 'No additional notes provided.'}</dd>
+                        </div>
+                      </dl>
+                    </div>
+                  </div>
+
+                  <div className="admin-actions">
                     <button
-                      onClick={() => setTypeFilter('all')}
-                      className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
-                        typeFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                      type="button"
+                      disabled={actionInProgressId === match.id}
+                      onClick={() => handleDismissMatch(match.id)}
+                      className="button button-ghost"
                     >
-                      All
+                      Dismiss Match
                     </button>
                     <button
-                      onClick={() => setTypeFilter('lost')}
-                      className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
-                        typeFilter === 'lost' ? 'bg-rose-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                      type="button"
+                      disabled={actionInProgressId === match.id}
+                      onClick={() => handleAcceptMatch(match.id)}
+                      className="button button-admin"
                     >
-                      Lost
-                    </button>
-                    <button
-                      onClick={() => setTypeFilter('found')}
-                      className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
-                        typeFilter === 'found' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Found
+                      {actionInProgressId === match.id ? 'Connecting...' : 'Confirm Connection'}
                     </button>
                   </div>
-                </div>
-              </div>
-
-              {/* Filter controls row */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                <div className="relative">
-                  <Search className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-3" />
-                  <input
-                    type="text"
-                    placeholder="Search by title, location, or ref code..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-purple-500 focus:bg-white"
-                  />
-                </div>
-
-                <div>
-                  <select
-                    value={categoryFilter}
-                    onChange={(e) => setCategoryFilter(e.target.value)}
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:border-purple-500 cursor-pointer"
-                  >
-                    <option value="All">All Categories</option>
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:border-purple-500 cursor-pointer"
-                  >
-                    <option value="All">All Statuses</option>
-                    <option value="REPORTED">REPORTED</option>
-                    <option value="OPEN">OPEN</option>
-                    <option value="VERIFICATION_REQUIRED">VERIFICATION_REQUIRED</option>
-                    <option value="AWAITING_STUDENT_ANSWERS">AWAITING_STUDENT_ANSWERS</option>
-                    <option value="ANSWERS_SUBMITTED">ANSWERS_SUBMITTED</option>
-                    <option value="VERIFIED">VERIFIED</option>
-                    <option value="ITEM_RETURNED">ITEM_RETURNED</option>
-                    <option value="RESOLVED">RESOLVED</option>
-                    <option value="REJECTED">REJECTED</option>
-                  </select>
-                </div>
-              </div>
+                </article>
+              ))}
             </div>
-
-            {/* Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold tracking-wider text-[10px]">
-                  <tr>
-                    <th className="px-6 py-3.5">Ref ID</th>
-                    <th className="px-6 py-3.5">Item Name &amp; Description</th>
-                    <th className="px-6 py-3.5">Type</th>
-                    <th className="px-6 py-3.5">Reported By</th>
-                    <th className="px-6 py-3.5">Location / Custody</th>
-                    <th className="px-6 py-3.5">Current Status</th>
-                    <th className="px-6 py-3.5 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {filteredItems.map((item) => {
-                    const isLost = item.type?.toLowerCase() === 'lost';
-                    const currentStatus = item.status?.toUpperCase() || 'OPEN';
-
-                    return (
-                      <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
-                        <td className="px-6 py-4 font-mono font-bold text-slate-500">#{item.id}</td>
-                        <td className="px-6 py-4 max-w-xs">
-                          <Link href={`/items/${item.id}`} className="font-bold text-slate-900 hover:text-purple-600 block">
-                            {item.name}
-                          </Link>
-                          <span className="text-[11px] text-slate-500 line-clamp-1">{item.description}</span>
-                          {item.isArchived && (
-                            <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full font-bold mt-1">
-                              <Archive className="h-2.5 w-2.5" /> Archived: {item.archivedReason || 'No reason noted'}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            isLost ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          }`}>
-                            {item.type}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="font-semibold text-slate-900 block">{item.reportedByName || 'Student'}</span>
-                          <span className="text-[10px] text-slate-400 font-mono">{item.reportedByEmail}</span>
-                        </td>
-                        <td className="px-6 py-4 font-medium">
-                          <div>{item.location}</div>
-                          {item.storageLocation && (
-                            <div className="text-[10px] text-indigo-600 font-bold">Locker: {item.storageLocation}</div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <select
-                            value={currentStatus}
-                            disabled={updatingId === item.id}
-                            onChange={(e) => handleStatusChange(item.id, e.target.value)}
-                            className="text-xs bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 font-semibold text-slate-800 focus:outline-none focus:border-purple-500 cursor-pointer disabled:opacity-50"
-                          >
-                            <option value="REPORTED">REPORTED</option>
-                            <option value="OPEN">OPEN</option>
-                            <option value="VERIFICATION_REQUIRED">VERIFICATION_REQUIRED</option>
-                            <option value="AWAITING_STUDENT_ANSWERS">AWAITING_STUDENT_ANSWERS</option>
-                            <option value="ANSWERS_SUBMITTED">ANSWERS_SUBMITTED</option>
-                            <option value="VERIFIED">VERIFIED</option>
-                            <option value="ITEM_RETURNED">ITEM_RETURNED</option>
-                            <option value="RESOLVED">RESOLVED</option>
-                            <option value="REJECTED">REJECTED</option>
-                          </select>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {currentStatus === 'VERIFIED' && (
-                              <button
-                                title="Authorize Item Custody Handover"
-                                onClick={() => {
-                                  setSelectedItemForHandover(item);
-                                  setItemHandoverRecipientId(item.reportedById || '');
-                                  setItemHandoverNotes('');
-                                  setItemHandoverModalOpen(true);
-                                }}
-                                className="px-2.5 py-1 text-[11px] font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-xs transition-colors inline-flex items-center gap-1"
-                              >
-                                <ShieldCheck className="h-3 w-3" />
-                                Handover
-                              </button>
-                            )}
-                            <button
-                              title="Ask Student Proof Questions"
-                              onClick={() => {
-                                setSelectedItemForQuestions(item);
-                                setSelectedStudentId(item.reportedById || students[0]?.id || '');
-                                setSendModalOpen(true);
-                              }}
-                              className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                            >
-                              <HelpCircle className="h-4 w-4" />
-                            </button>
-                            <button
-                              title={item.isArchived ? 'Restore Report' : 'Archive Report'}
-                              onClick={() => {
-                                setItemToArchive(item);
-                                setArchiveReason(item.archivedReason || '');
-                                setArchiveModalOpen(true);
-                              }}
-                              className={`p-1.5 rounded-lg transition-colors ${
-                                item.isArchived
-                                  ? 'text-emerald-600 hover:bg-emerald-50'
-                                  : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
-                              }`}
-                            >
-                              {item.isArchived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          ) : (
+            <div className="admin-empty">
+              <span>
+                <Check className="h-8 w-8" />
+              </span>
+              <h2>All Match Queues Clear</h2>
+              <p>
+                There are no automated match candidates pending review. You can manually connect reports below or review claims.
+              </p>
             </div>
-          </section>
-        )}
+          )}
 
-        {/* TAB 2: VERIFICATION CENTER */}
-        {activeTab === 'verifications' && (
-          <section className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          {/* ========================================================= */}
+          {/* MANUAL MATCHING STUDIO */}
+          {/* ========================================================= */}
+          <div style={{ marginTop: '36px' }}>
+            <div className="section-row">
               <div>
-                <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-                  Verification Inquiries &amp; Custody Handover
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Review proof submitted by students, ask follow-up questions, and authorize item handover.
-                </p>
+                <h2>Manual Report Matching Studio</h2>
+                <p>Select an active lost report and an active found report to pair them manually.</p>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginTop: '16px' }}>
+              
+              {/* Left Column: Active Lost Reports */}
+              <div className="admin-list" style={{ padding: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span className="type-badge lost">Lost Reports</span>
+                    <strong style={{ fontSize: '12px' }}>({filteredLost.length})</strong>
+                  </div>
+                  <div className="search-field" style={{ width: '170px' }}>
+                    <Search className="h-3.5 w-3.5" />
+                    <input
+                      type="text"
+                      placeholder="Search lost items..."
+                      value={lostSearch}
+                      onChange={(e) => setLostSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ maxHeight: '340px', overflowY: 'auto', display: 'grid', gap: '8px' }}>
+                  {filteredLost.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '30px', color: 'var(--muted)', fontSize: '11px' }}>
+                      No active lost reports found.
+                    </div>
+                  ) : (
+                    filteredLost.map((item) => {
+                      const isSelected = selectedLostId === item.id;
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => setSelectedLostId(isSelected ? null : item.id)}
+                          style={{
+                            padding: '12px',
+                            borderRadius: '10px',
+                            border: `1.5px solid ${isSelected ? 'var(--coral)' : 'var(--line)'}`,
+                            background: isSelected ? 'var(--coral-soft)' : 'var(--paper)',
+                            cursor: 'pointer',
+                            transition: '.2s',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <strong style={{ fontSize: '11px', color: 'var(--navy)' }}>{item.name}</strong>
+                            <span style={{ fontSize: '9px', fontWeight: 700, color: 'var(--coral)' }}>#{item.id}</span>
+                          </div>
+                          <p style={{ margin: '4px 0 0', fontSize: '10px', color: 'var(--muted)' }}>
+                            {item.location} · {item.category}
+                          </p>
+                          <p style={{ margin: '2px 0 0', fontSize: '9px', color: 'var(--muted)' }}>
+                            By {item.reportedBy?.name || 'Student'} ({item.reportedBy?.email || ''})
+                          </p>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column: Active Found Reports */}
+              <div className="admin-list" style={{ padding: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span className="type-badge found">Found Reports</span>
+                    <strong style={{ fontSize: '12px' }}>({filteredFound.length})</strong>
+                  </div>
+                  <div className="search-field" style={{ width: '170px' }}>
+                    <Search className="h-3.5 w-3.5" />
+                    <input
+                      type="text"
+                      placeholder="Search found items..."
+                      value={foundSearch}
+                      onChange={(e) => setFoundSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ maxHeight: '340px', overflowY: 'auto', display: 'grid', gap: '8px' }}>
+                  {filteredFound.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '30px', color: 'var(--muted)', fontSize: '11px' }}>
+                      No active found reports found.
+                    </div>
+                  ) : (
+                    filteredFound.map((item) => {
+                      const isSelected = selectedFoundId === item.id;
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => setSelectedFoundId(isSelected ? null : item.id)}
+                          style={{
+                            padding: '12px',
+                            borderRadius: '10px',
+                            border: `1.5px solid ${isSelected ? 'var(--teal)' : 'var(--line)'}`,
+                            background: isSelected ? 'var(--teal-soft)' : 'var(--paper)',
+                            cursor: 'pointer',
+                            transition: '.2s',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <strong style={{ fontSize: '11px', color: 'var(--navy)' }}>{item.name}</strong>
+                            <span style={{ fontSize: '9px', fontWeight: 700, color: 'var(--teal)' }}>#{item.id}</span>
+                          </div>
+                          <p style={{ margin: '4px 0 0', fontSize: '10px', color: 'var(--muted)' }}>
+                            {item.location} · {item.category}
+                          </p>
+                          <p style={{ margin: '2px 0 0', fontSize: '9px', color: 'var(--muted)' }}>
+                            Locker: {item.storageLocation || 'Campus Security Locker'}
+                          </p>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+            </div>
+
+            {/* Manual Connection Confirmation Bar */}
+            <div
+              style={{
+                marginTop: '16px',
+                padding: '18px 24px',
+                borderRadius: '14px',
+                border: '1px solid var(--line)',
+                background: 'var(--paper)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '14px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flex: 1, minWidth: '280px' }}>
+                <div style={{ display: 'grid' }}>
+                  <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '.7px', color: 'var(--muted)', fontWeight: 800 }}>
+                    Selected Pair
+                  </span>
+                  <strong style={{ fontSize: '12px', color: 'var(--navy)' }}>
+                    {selectedLostItem ? selectedLostItem.name : 'Select Lost Item'}{' '}
+                    <span style={{ color: 'var(--purple)' }}>↔</span>{' '}
+                    {selectedFoundItem ? selectedFoundItem.name : 'Select Found Item'}
+                  </strong>
+                </div>
+
+                <input
+                  type="text"
+                  placeholder="Optional admin connection note..."
+                  value={manualNotes}
+                  onChange={(e) => setManualNotes(e.target.value)}
+                  style={{
+                    flex: 1,
+                    height: '38px',
+                    padding: '0 12px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--line)',
+                    fontSize: '11px',
+                    outline: 0,
+                    background: '#f8f4ee',
+                  }}
+                />
               </div>
 
               <button
-                onClick={() => {
-                  setSelectedItemForQuestions(items[0] || null);
-                  setSelectedStudentId(students[0]?.id || '');
-                  setSendModalOpen(true);
-                }}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition-colors shadow-xs"
+                type="button"
+                disabled={!selectedLostId || !selectedFoundId || submittingManual}
+                onClick={handleManualConnect}
+                className="button button-admin"
+                style={{ opacity: selectedLostId && selectedFoundId ? 1 : 0.5 }}
               >
-                <PlusCircle className="h-4 w-4" />
-                New Verification Inquiry
+                <GitCompare className="h-4 w-4" />
+                {submittingManual ? 'Connecting...' : 'Connect Reports Manually'}
               </button>
             </div>
+          </div>
+        </section>
+      )}
 
-            {verifications.length === 0 ? (
-              <div className="p-12 text-center text-slate-400">
-                <ShieldCheck className="h-10 w-10 mx-auto mb-2 opacity-50 text-slate-300" />
-                <p className="text-sm font-semibold text-slate-700">No verification inquiries currently active.</p>
-                <p className="text-xs text-slate-500 mt-1">
-                  Click &apos;New Verification Inquiry&apos; or select an item from the registry to send questions to a student.
-                </p>
+      {/* ========================================================= */}
+      {/* TAB 2: CLAIMS REVIEW */}
+      {/* ========================================================= */}
+      {activeTab === 'claims' && (
+        <section>
+          {/* Summary Bar */}
+          <div className="admin-summary">
+            <div>
+              <span>
+                <FileCheck2 className="h-4 w-4" />
+              </span>
+              <p>
+                <strong>Ownership Claims Registry ({claims.length})</strong>
+                <small>Assess student proof answers &amp; authorize collections</small>
+              </p>
+            </div>
+            <span>
+              {pendingClaimsCount} pending decision · {claims.filter((c) => c.status === 'approved').length} approved
+            </span>
+          </div>
+
+          <div className="admin-list" style={{ marginTop: '18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <strong style={{ fontSize: '13px', color: 'var(--navy)' }}>Submitted Verification Claims</strong>
+              <div className="search-field">
+                <Search className="h-3.5 w-3.5" />
+                <input
+                  type="text"
+                  placeholder="Search by student, item, ID..."
+                  value={claimsSearch}
+                  onChange={(e) => setClaimsSearch(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {filteredClaims.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--muted)', fontSize: '12px' }}>
+                No matching ownership claims found in registry.
               </div>
             ) : (
-              <div className="divide-y divide-slate-100">
-                {verifications.map((v) => {
-                  let parsedQuestions: string[] = [];
-                  let parsedAnswers: string[] = [];
-                  try { parsedQuestions = JSON.parse(v.questions); } catch { parsedQuestions = [v.questions]; }
-                  try { parsedAnswers = v.answers ? JSON.parse(v.answers) : []; } catch { parsedAnswers = []; }
+              filteredClaims.map((claim) => {
+                const isPending = claim.status === 'pending';
+                const isApproved = claim.status === 'approved';
+                const isRejected = claim.status === 'rejected';
 
-                  const hasAnswers = parsedAnswers.length > 0;
+                let statusClass = 'review';
+                let statusLabel = 'Pending Review';
+                if (isApproved) {
+                  statusClass = 'ready';
+                  statusLabel = 'Approved / Verified';
+                } else if (isRejected) {
+                  statusClass = 'searching';
+                  statusLabel = 'Rejected';
+                }
 
-                  return (
-                    <div key={v.id} className="p-6 hover:bg-slate-50/70 transition-colors flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                      <div className="space-y-2 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            v.status === 'VERIFIED'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : v.status === 'HANDED_OVER'
-                              ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                              : v.status === 'ANSWERS_SUBMITTED'
-                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                              : v.status === 'REJECTED'
-                              ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                              : 'bg-amber-50 text-amber-700 border border-amber-200'
-                          }`}>
-                            {v.status}
-                          </span>
-                          <span className="text-xs font-bold text-slate-900">
-                            Item: {v.item?.name}
-                          </span>
-                          <span className="text-xs text-slate-400">• Student ID: {v.student?.studentId || v.studentId} ({v.student?.name})</span>
-                        </div>
+                return (
+                  <article key={claim.id}>
+                    <span>
+                      <FileText className="h-4 w-4" />
+                    </span>
 
-                        {/* Questions & Answers Preview */}
-                        <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 space-y-2">
-                          {parsedQuestions.map((q, idx) => (
-                            <div key={idx} className="text-xs">
-                              <span className="font-bold text-slate-700">Q{idx + 1}: {q}</span>
-                              <div className="text-slate-600 mt-0.5 pl-3 border-l-2 border-indigo-400 italic">
-                                {parsedAnswers[idx] ? parsedAnswers[idx] : <span className="text-amber-600 not-italic">Awaiting student response...</span>}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        {v.adminNotes && (
-                          <p className="text-xs text-slate-500">
-                            <strong>Admin Note:</strong> {v.adminNotes}
-                          </p>
-                        )}
-                        {v.rejectionReason && (
-                          <p className="text-xs text-rose-600 font-semibold">
-                            <strong>Rejection Reason:</strong> {v.rejectionReason}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Review Action */}
-                      <div className="shrink-0 flex items-center gap-2">
-                        <button
-                          onClick={() => {
-                            setSelectedVerification(v);
-                            setDecisionAction('VERIFY');
-                            setDecisionNotes(v.adminNotes || '');
-                            setHandoverRecipientId(v.student?.studentId || '');
-                            setDecisionModalOpen(true);
-                          }}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
-                        >
-                          <ShieldCheck className="h-4 w-4" />
-                          Review &amp; Decide
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* TAB 3: STUDENT DIRECTORY */}
-        {activeTab === 'students' && (
-          <section className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-                  Student Directory &amp; Activity
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  View campus user profiles, report history, and verification activities.
-                </p>
-              </div>
-
-              <Link
-                href="/admin/students"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-purple-600 hover:bg-purple-700 text-white shadow-xs transition-all"
-              >
-                <Users className="h-4 w-4" />
-                Open Dedicated Student Directory &rarr;
-              </Link>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold tracking-wider text-[10px]">
-                  <tr>
-                    <th className="px-6 py-3.5">Student Name</th>
-                    <th className="px-6 py-3.5">Campus ID</th>
-                    <th className="px-6 py-3.5">Email</th>
-                    <th className="px-6 py-3.5">Role</th>
-                    <th className="px-6 py-3.5">Reports Filed</th>
-                    <th className="px-6 py-3.5">Verifications</th>
-                    <th className="px-6 py-3.5">Last Active</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {students.map((st) => (
-                    <tr key={st.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="px-6 py-4 font-bold text-slate-900">{st.name}</td>
-                      <td className="px-6 py-4 font-mono text-indigo-600 font-bold">{st.studentId || 'N/A'}</td>
-                      <td className="px-6 py-4 text-slate-500">{st.email}</td>
-                      <td className="px-6 py-4">
-                        <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-semibold rounded-md text-[10px]">
-                          {st.role}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-rose-600 font-bold">{st.stats?.lostReports || 0} Lost</span>
-                        {' • '}
-                        <span className="text-emerald-600 font-bold">{st.stats?.foundReports || 0} Found</span>
-                      </td>
-                      <td className="px-6 py-4 font-semibold text-slate-800">
-                        {st.stats?.activeVerifications || 0} Inquiries
-                      </td>
-                      <td className="px-6 py-4 text-slate-400">
-                        {st.lastLoginAt ? new Date(st.lastLoginAt).toLocaleDateString() : 'Recent'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
-
-        {/* TAB 4: AUDIT TRAIL */}
-        {activeTab === 'audit' && (
-          <section className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-                  Immutable Administrative Audit Trail
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Full chronological log of administrative inquiries, claims verification, status updates, and handovers.
-                </p>
-              </div>
-
-              <Link
-                href="/admin/audit-log"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-purple-600 hover:bg-purple-700 text-white shadow-xs transition-all"
-              >
-                <History className="h-4 w-4" />
-                Open Full System Audit Log &rarr;
-              </Link>
-            </div>
-
-            {auditLogs.length === 0 ? (
-              <div className="p-12 text-center text-slate-400">
-                <History className="h-10 w-10 mx-auto mb-2 opacity-50 text-slate-300" />
-                <p className="text-sm font-semibold text-slate-700">No audit logs recorded yet.</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {auditLogs.map((log) => (
-                  <div key={log.id} className="p-4 sm:p-5 flex items-start gap-4 hover:bg-slate-50/60 transition-colors">
-                    <div className="mt-1 h-8 w-8 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-                      <History className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <span className="font-bold text-xs text-slate-900">
-                          {log.action.replace(/_/g, ' ')}
-                        </span>
-                        <span className="text-[11px] text-slate-400 font-mono">
-                          {new Date(log.createdAt).toLocaleString()}
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <strong style={{ fontSize: '12px', color: 'var(--navy)' }}>
+                          {claim.itemTitle}
+                        </strong>
+                        <span style={{ fontSize: '9px', color: 'var(--muted)' }}>
+                          · Claimant: {claim.claimantName} ({claim.studentId})
                         </span>
                       </div>
-                      <p className="text-xs text-slate-600">
-                        Performed by: <span className="font-semibold text-slate-800">{log.user?.name}</span> ({log.user?.email})
-                        {log.itemId && <> • Target Item: <span className="font-mono text-indigo-600">#{log.itemId}</span></>}
-                      </p>
-                      {log.details && (
-                        <p className="text-[11px] text-slate-500 bg-slate-50 p-2 rounded-lg font-mono">
-                          {log.details}
-                        </p>
+                      <small style={{ marginTop: '3px' }}>
+                        Submitted {claim.submittedDate} · Color: {claim.answers?.exactColor} · Marks: {claim.answers?.uniqueMark} · Location: {claim.answers?.lastSeenLocation}
+                      </small>
+                      {claim.rejectionReason && (
+                        <small style={{ color: '#be4b5e', fontWeight: 700, marginTop: '2px' }}>
+                          Rejection Reason: {claim.rejectionReason}
+                        </small>
                       )}
                     </div>
-                  </div>
-                ))}
-              </div>
+
+                    <span className={`status ${statusClass}`}>
+                      <i></i>
+                      {statusLabel}
+                    </span>
+
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      {isPending && (
+                        <>
+                          <button
+                            type="button"
+                            disabled={actionInProgressId === claim.id}
+                            onClick={() => handleApproveClaim(claim.id)}
+                            title="Approve Claim & Verify Item"
+                            className="button button-found"
+                            style={{ minHeight: '30px', padding: '0 10px', fontSize: '10px' }}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            disabled={actionInProgressId === claim.id}
+                            onClick={() => {
+                              setRejectModalClaim(claim);
+                              setRejectReason('');
+                            }}
+                            title="Reject Claim"
+                            className="button button-ghost"
+                            style={{ minHeight: '30px', padding: '0 10px', fontSize: '10px', color: '#be4b5e' }}
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+
+                      {isApproved && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHandoverModalItem({ id: claim.itemId, name: claim.itemTitle, reportedById: claim.studentId });
+                            setHandoverRecipient(claim.studentId);
+                            setHandoverNotes('');
+                          }}
+                          className="button button-admin"
+                          style={{ minHeight: '30px', padding: '0 10px', fontSize: '10px' }}
+                        >
+                          Handover
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })
             )}
-          </section>
-        )}
-
-      </main>
-
-      {/* MODAL 1: Send Verification Questions */}
-      {sendModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
-            <div className="px-6 py-4 bg-purple-700 text-white flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-base flex items-center gap-2">
-                  <HelpCircle className="h-4 w-4 text-purple-200" />
-                  Dispatch Verification Questions
-                </h3>
-                <p className="text-xs text-purple-100">Directly inquiry proof of item ownership from student</p>
-              </div>
-              <button onClick={() => setSendModalOpen(false)} className="text-purple-200 hover:text-white p-1">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSendQuestions} className="p-6 overflow-y-auto space-y-4 flex-1">
-              {/* Select Item */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Target Campus Item</label>
-                <select
-                  value={selectedItemForQuestions?.id || ''}
-                  onChange={(e) => {
-                    const it = items.find((i) => i.id === e.target.value);
-                    setSelectedItemForQuestions(it || null);
-                  }}
-                  className="w-full text-xs rounded-xl border border-slate-200 p-2.5 bg-slate-50 text-slate-800 font-semibold"
-                  required
-                >
-                  {items.map((i) => (
-                    <option key={i.id} value={i.id}>
-                      #{i.id} - {i.name} ({i.type} at {i.location})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Select Student */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Target Student Account</label>
-                <select
-                  value={selectedStudentId}
-                  onChange={(e) => setSelectedStudentId(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-200 p-2.5 bg-slate-50 text-slate-800 font-semibold"
-                  required
-                >
-                  {students.map((st) => (
-                    <option key={st.id} value={st.id}>
-                      {st.name} ({st.studentId || st.email})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Dynamic Questions */}
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-slate-700">Verification Questions</label>
-                {questionsList.map((q, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={q}
-                      onChange={(e) => {
-                        const copy = [...questionsList];
-                        copy[idx] = e.target.value;
-                        setQuestionsList(copy);
-                      }}
-                      className="flex-1 text-xs rounded-xl border border-slate-200 p-2.5 bg-white text-slate-800"
-                      required
-                    />
-                    {questionsList.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => setQuestionsList(questionsList.filter((_, i) => i !== idx))}
-                        className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-
-                <button
-                  type="button"
-                  onClick={() => setQuestionsList([...questionsList, ''])}
-                  className="text-xs text-purple-600 hover:text-purple-800 font-bold inline-flex items-center gap-1 pt-1"
-                >
-                  <PlusCircle className="h-3.5 w-3.5" /> Add Another Question
-                </button>
-              </div>
-
-              {/* Admin Note */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Administrator Note / Special Instructions</label>
-                <textarea
-                  rows={2}
-                  value={adminNotes}
-                  onChange={(e) => setAdminNotes(e.target.value)}
-                  placeholder="e.g. Please respond within 48 hours to authorize release from the safety custody locker..."
-                  className="w-full text-xs rounded-xl border border-slate-200 p-2.5 bg-white text-slate-800"
-                />
-              </div>
-
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSendModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={sendingQuestions}
-                  className="inline-flex items-center gap-1.5 px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-md disabled:opacity-50"
-                >
-                  {sendingQuestions ? 'Dispatching...' : 'Dispatch Inquiry'}
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
+        </section>
       )}
 
-      {/* MODAL 2: Review Decision & Handover */}
-      {decisionModalOpen && selectedVerification && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
-            <div className="px-6 py-4 bg-indigo-700 text-white flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-base flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-indigo-200" />
-                  Verification Decision &amp; Handover
-                </h3>
-                <p className="text-xs text-indigo-100">Item: {selectedVerification.item?.name}</p>
-              </div>
-              <button onClick={() => setDecisionModalOpen(false)} className="text-indigo-200 hover:text-white p-1">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleDecisionSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
-              {/* Decision Action Select */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Administrative Decision</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDecisionAction('VERIFY')}
-                    className={`p-2.5 rounded-xl border text-xs font-bold text-center transition-all ${
-                      decisionAction === 'VERIFY'
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    Verify Ownership
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDecisionAction('HANDOVER')}
-                    className={`p-2.5 rounded-xl border text-xs font-bold text-center transition-all ${
-                      decisionAction === 'HANDOVER'
-                        ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    Authorize Handover
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDecisionAction('CLARIFY')}
-                    className={`p-2.5 rounded-xl border text-xs font-bold text-center transition-all ${
-                      decisionAction === 'CLARIFY'
-                        ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    Ask Clarification
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDecisionAction('REJECT')}
-                    className={`p-2.5 rounded-xl border text-xs font-bold text-center transition-all ${
-                      decisionAction === 'REJECT'
-                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    Reject Claim
-                  </button>
-                </div>
-              </div>
-
-              {decisionAction === 'HANDOVER' && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Recipient Campus Student ID</label>
-                  <input
-                    type="text"
-                    value={handoverRecipientId}
-                    onChange={(e) => setHandoverRecipientId(e.target.value)}
-                    placeholder="e.g. STU-2026-8819"
-                    className="w-full text-xs rounded-xl border border-slate-200 p-2.5 bg-white text-slate-800"
-                    required
-                  />
-                </div>
-              )}
-
-              {decisionAction === 'REJECT' && (
-                <div>
-                  <label className="block text-xs font-bold text-rose-700 mb-1">Rejection Reason</label>
-                  <textarea
-                    rows={2}
-                    value={rejectionReason}
-                    onChange={(e) => setRejectionReason(e.target.value)}
-                    placeholder="Explain why the submitted answers failed to verify ownership..."
-                    className="w-full text-xs rounded-xl border border-rose-200 p-2.5 bg-rose-50 text-rose-900"
-                    required
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Admin Notes / Remarks</label>
-                <textarea
-                  rows={2}
-                  value={decisionNotes}
-                  onChange={(e) => setDecisionNotes(e.target.value)}
-                  placeholder="Additional custody or handover remarks..."
-                  className="w-full text-xs rounded-xl border border-slate-200 p-2.5 bg-white text-slate-800"
-                />
-              </div>
-
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setDecisionModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingDecision}
-                  className="inline-flex items-center gap-1.5 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md disabled:opacity-50"
-                >
-                  {submittingDecision ? 'Saving...' : 'Record Decision'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 3: Archive / Unarchive */}
-      {archiveModalOpen && itemToArchive && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100 flex flex-col">
-            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-base flex items-center gap-2">
-                  <Archive className="h-4 w-4 text-amber-400" />
-                  {itemToArchive.isArchived ? 'Restore Report' : 'Archive Report'}
-                </h3>
-                <p className="text-xs text-slate-400">Item #{itemToArchive.id}: {itemToArchive.name}</p>
-              </div>
-              <button onClick={() => setArchiveModalOpen(false)} className="text-slate-400 hover:text-white p-1">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleToggleArchive} className="p-6 space-y-4">
-              <p className="text-xs text-slate-600 leading-relaxed">
-                {itemToArchive.isArchived
-                  ? 'Restoring will make this item publicly visible again in the search registry.'
-                  : 'Archiving hides this item from public browsing without deleting any database records or audit trails.'}
+      {/* ========================================================= */}
+      {/* TAB 3: CUSTODY LOCKER */}
+      {/* ========================================================= */}
+      {activeTab === 'custody' && (
+        <section>
+          {/* Summary Bar */}
+          <div className="admin-summary">
+            <div>
+              <span>
+                <Package className="h-4 w-4" />
+              </span>
+              <p>
+                <strong>Custody Locker &amp; Asset Vault ({custodyItems.length})</strong>
+                <small>Physical items securely held by Campus Safety &amp; Security</small>
               </p>
+            </div>
+            <span>{activeInCustodyCount} currently stored in locker</span>
+          </div>
 
-              {!itemToArchive.isArchived && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Archive Reason</label>
-                  <textarea
-                    rows={3}
-                    value={archiveReason}
-                    onChange={(e) => setArchiveReason(e.target.value)}
-                    placeholder="e.g. Duplicate report, spam, resolved outside portal, or expired item..."
-                    className="w-full text-xs rounded-xl border border-slate-200 p-2.5 bg-white text-slate-800"
-                    required
-                  />
-                </div>
-              )}
-
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setArchiveModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingArchive}
-                  className="inline-flex items-center gap-1.5 px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-md disabled:opacity-50"
-                >
-                  {submittingArchive
-                    ? 'Processing...'
-                    : itemToArchive.isArchived
-                    ? 'Confirm Restore'
-                    : 'Confirm Archive'}
-                </button>
+          <div className="admin-list" style={{ marginTop: '18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <strong style={{ fontSize: '13px', color: 'var(--navy)' }}>Items in Physical Custody</strong>
+              <div className="search-field">
+                <Search className="h-3.5 w-3.5" />
+                <input
+                  type="text"
+                  placeholder="Search custody items..."
+                  value={custodySearch}
+                  onChange={(e) => setCustodySearch(e.target.value)}
+                />
               </div>
-            </form>
+            </div>
+
+            {filteredCustody.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--muted)', fontSize: '12px' }}>
+                No custody items found in vault.
+              </div>
+            ) : (
+              filteredCustody.map((item) => {
+                const isHandedOver = item.status === 'RESOLVED' || item.status === 'ITEM_RETURNED';
+                const statusClass = isHandedOver ? 'returned' : 'ready';
+                const statusLabel = isHandedOver ? 'Returned / Resolved' : 'Held in Locker';
+
+                return (
+                  <article key={item.id}>
+                    {item.image ? (
+                      <div
+                        onClick={() =>
+                          setFullImage({
+                            url: item.image!,
+                            title: item.name,
+                            subtitle: `Custody Locker · Ref #${item.id} · Stored at ${item.storageLocation || 'Campus Safety Desk'}`,
+                          })
+                        }
+                        title="Click to view full image"
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '8px',
+                          overflow: 'hidden',
+                          cursor: 'pointer',
+                          border: '1px solid var(--line)',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      </div>
+                    ) : (
+                      <span>
+                        <Package className="h-4 w-4" />
+                      </span>
+                    )}
+
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <strong style={{ fontSize: '12px', color: 'var(--navy)' }}>
+                          #{item.id} · {item.name}
+                        </strong>
+                        <span style={{ fontSize: '9px', color: 'var(--muted)' }}>
+                          ({item.category})
+                        </span>
+                        {item.image && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setFullImage({
+                                url: item.image!,
+                                title: item.name,
+                                subtitle: `Custody Locker · Ref #${item.id}`,
+                              })
+                            }
+                            style={{
+                              border: 0,
+                              background: 'none',
+                              color: 'var(--teal)',
+                              fontSize: '9px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              padding: 0,
+                            }}
+                          >
+                            Examine Photo ↗
+                          </button>
+                        )}
+                      </div>
+                      <small style={{ marginTop: '3px' }}>
+                        Locker: {item.storageLocation || 'Campus Safety Desk'} · Found at {item.location} · Finder: {item.reportedByName || 'Campus Member'}
+                      </small>
+                    </div>
+
+                    <span className={`status ${statusClass}`}>
+                      <i></i>
+                      {statusLabel}
+                    </span>
+
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      {!isHandedOver && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHandoverModalItem(item);
+                            setHandoverRecipient(item.reportedById || '');
+                            setHandoverNotes('');
+                          }}
+                          className="button button-admin"
+                          style={{ minHeight: '30px', padding: '0 10px', fontSize: '10px' }}
+                        >
+                          Handover
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ========================================================= */}
+      {/* REJECT CLAIM MODAL */}
+      {/* ========================================================= */}
+      {rejectModalClaim && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 999,
+          background: 'rgba(29, 21, 26, .6)',
+          backdropFilter: 'blur(4px)',
+          display: 'grid',
+          placeItems: 'center',
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'var(--paper)',
+            borderRadius: '16px',
+            border: '1px solid var(--line)',
+            padding: '24px',
+            maxWidth: '460px',
+            width: '100%',
+            boxShadow: 'var(--shadow)'
+          }}>
+            <h3 style={{ margin: '0 0 8px', font: '800 18px "Manrope", sans-serif', color: 'var(--navy)' }}>
+              Reject Ownership Claim
+            </h3>
+            <p style={{ margin: '0 0 16px', fontSize: '11px', color: 'var(--muted)' }}>
+              Provide a clear reason explaining why this claim for <strong>{rejectModalClaim.itemTitle}</strong> is being rejected. The student will be notified.
+            </p>
+
+            <textarea
+              rows={3}
+              placeholder="e.g. Identifying color or marks did not match item in custody..."
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: '9px',
+                border: '1px solid var(--line)',
+                fontSize: '11px',
+                outline: 0,
+                background: '#f8f4ee'
+              }}
+            />
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
+              <button
+                type="button"
+                onClick={() => setRejectModalClaim(null)}
+                className="button button-ghost"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={submittingReject}
+                onClick={handleRejectClaimSubmit}
+                className="button"
+                style={{ background: '#be4b5e', color: 'white' }}
+              >
+                {submittingReject ? 'Rejecting...' : 'Confirm Rejection'}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* MODAL 4: Confirm Custody Handover */}
-      {itemHandoverModalOpen && selectedItemForHandover && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100 flex flex-col">
-            <div className="px-6 py-4 bg-purple-900 text-white flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-base flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-purple-300" />
-                  Confirm Item Custody Handover
-                </h3>
-                <p className="text-xs text-purple-200">
-                  Item #{selectedItemForHandover.id}: {selectedItemForHandover.name}
-                </p>
-              </div>
-              <button onClick={() => setItemHandoverModalOpen(false)} className="text-purple-300 hover:text-white p-1">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+      {/* ========================================================= */}
+      {/* HANDOVER CONFIRMATION MODAL */}
+      {/* ========================================================= */}
+      {handoverModalItem && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 999,
+          background: 'rgba(29, 21, 26, .6)',
+          backdropFilter: 'blur(4px)',
+          display: 'grid',
+          placeItems: 'center',
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'var(--paper)',
+            borderRadius: '16px',
+            border: '1px solid var(--line)',
+            padding: '24px',
+            maxWidth: '460px',
+            width: '100%',
+            boxShadow: 'var(--shadow)'
+          }}>
+            <h3 style={{ margin: '0 0 8px', font: '800 18px "Manrope", sans-serif', color: 'var(--navy)' }}>
+              Authorize Item Handover
+            </h3>
+            <p style={{ margin: '0 0 16px', fontSize: '11px', color: 'var(--muted)' }}>
+              Confirm physical handover of <strong>{handoverModalItem.name}</strong> (#{handoverModalItem.id}). This will permanently stamp the handover in the security audit log.
+            </p>
 
-            <form onSubmit={handleDirectHandoverSubmit} className="p-6 space-y-4">
-              <div className="bg-purple-50 border border-purple-200/80 rounded-2xl p-3 text-xs text-purple-900">
-                <p className="font-bold">Two-Step Verification Handover</p>
-                <p className="text-[11px] text-purple-700 mt-0.5">
-                  Confirming this action stamps the official return date/time, marks the report as <strong>RESOLVED</strong>, and generates an audit log entry.
-                </p>
-              </div>
-
+            <div style={{ display: 'grid', gap: '10px' }}>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Recipient Student ID or Account ID (Optional)
+                <label style={{ fontSize: '10px', fontWeight: 700, color: 'var(--navy)', textTransform: 'uppercase' }}>
+                  Recipient Student ID / Account
                 </label>
                 <input
                   type="text"
-                  value={itemHandoverRecipientId}
-                  onChange={(e) => setItemHandoverRecipientId(e.target.value)}
-                  placeholder="e.g. STU-2026-8819 or User ID"
-                  className="w-full text-xs rounded-xl border border-slate-200 p-2.5 bg-white text-slate-800"
+                  placeholder="Student ID or Email..."
+                  value={handoverRecipient}
+                  onChange={(e) => setHandoverRecipient(e.target.value)}
+                  style={{
+                    width: '100%',
+                    height: '38px',
+                    padding: '0 12px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--line)',
+                    fontSize: '11px',
+                    outline: 0,
+                    background: '#f8f4ee',
+                    marginTop: '4px'
+                  }}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Handover Notes / Verification Remarks
+                <label style={{ fontSize: '10px', fontWeight: 700, color: 'var(--navy)', textTransform: 'uppercase' }}>
+                  Handover Notes
                 </label>
-                <textarea
-                  rows={2}
-                  value={itemHandoverNotes}
-                  onChange={(e) => setItemHandoverNotes(e.target.value)}
-                  placeholder="e.g. Student ID verified in person. Belonging inspected and collected."
-                  className="w-full text-xs rounded-xl border border-slate-200 p-2.5 bg-white text-slate-800"
+                <input
+                  type="text"
+                  placeholder="e.g. Identity verified via Student Card #STU-..."
+                  value={handoverNotes}
+                  onChange={(e) => setHandoverNotes(e.target.value)}
+                  style={{
+                    width: '100%',
+                    height: '38px',
+                    padding: '0 12px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--line)',
+                    fontSize: '11px',
+                    outline: 0,
+                    background: '#f8f4ee',
+                    marginTop: '4px'
+                  }}
                 />
               </div>
+            </div>
 
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setItemHandoverModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingItemHandover}
-                  className="inline-flex items-center gap-1.5 px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-md disabled:opacity-50"
-                >
-                  {submittingItemHandover ? 'Processing...' : 'Authorize Handover & Resolve'}
-                </button>
-              </div>
-            </form>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '18px' }}>
+              <button
+                type="button"
+                onClick={() => setHandoverModalItem(null)}
+                className="button button-ghost"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={submittingHandover}
+                onClick={handleHandoverSubmit}
+                className="button button-admin"
+              >
+                {submittingHandover ? 'Recording...' : 'Authorize & Resolve'}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      <Footer />
-    </div>
+      {/* Toast Notification */}
+      <div className={`toast ${toastMessage ? 'show' : ''}`}>
+        <Check className="h-3.5 w-3.5" />
+        <span>{toastMessage}</span>
+      </div>
+
+      {/* Full Image Viewer Modal */}
+      <ImageViewerModal
+        isOpen={!!fullImage}
+        imageUrl={fullImage?.url || null}
+        title={fullImage?.title}
+        subtitle={fullImage?.subtitle}
+        onClose={() => setFullImage(null)}
+      />
+    </>
   );
 }
-

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -22,8 +22,6 @@ import {
   Ban,
   MessageSquare
 } from 'lucide-react';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
 import { 
   createVerificationRequest, 
   getVerificationRequestsForAdmin, 
@@ -197,39 +195,33 @@ export default function AdminVerificationHubPage() {
   const pendingAnswerCount = requests.filter((r) => r.status === 'ANSWERED').length;
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col justify-between text-slate-900">
-      <Navbar />
-
-      <main className="flex-1 py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full space-y-6">
-        
-        {/* Navigation Breadcrumb */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <Link
-              href="/admin"
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-purple-700 hover:text-purple-900 transition-colors mb-1"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Back to Administrator Console
-            </Link>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-              Student Verification &amp; Inquiries Hub
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Send tailored proof questions to students and review submitted answers before releasing custody.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={loadData}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors shadow-xs"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-          </div>
+    <div className="space-y-6">
+      {/* Topbar */}
+      <div className="admin-topbar">
+        <div>
+          <span className="match-kicker">Security Inquiries</span>
+          <h1>Verification Hub</h1>
+          <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '13px' }}>
+            Send tailored proof questions to students and review submitted answers before releasing custody.
+          </p>
         </div>
+
+        <div>
+          <div className="verified">
+            <ShieldCheck className="h-4 w-4" />
+            <span>Verification Queue</span>
+          </div>
+
+          <button
+            onClick={loadData}
+            className="button button-ghost"
+            style={{ minHeight: '36px', padding: '0 14px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
+      </div>
 
         {/* Toast Alert */}
         {toastMessage && (
@@ -490,8 +482,6 @@ export default function AdminVerificationHubPage() {
           </div>
         )}
 
-      </main>
-
       {/* REVIEW DECISION MODAL */}
       {reviewModalOpen && selectedRequestForReview && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -612,8 +602,7 @@ export default function AdminVerificationHubPage() {
           </div>
         </div>
       )}
-
-      <Footer />
     </div>
   );
 }
+

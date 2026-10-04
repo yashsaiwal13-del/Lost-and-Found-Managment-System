@@ -4,19 +4,9 @@ import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
-import { 
-  ShieldCheck, 
-  Lock, 
-  Mail, 
-  Compass, 
-  ArrowRight, 
-  UserCheck, 
-  AlertCircle,
-  CheckCircle2,
-  Sparkles
-} from 'lucide-react';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
+import { Header } from '@/components/ui/Header';
+import { Footer } from '@/components/ui/Footer';
+import { Icon } from '@/components/ui/Icon';
 
 function LoginForm() {
   const router = useRouter();
@@ -41,10 +31,9 @@ function LoginForm() {
       });
 
       if (res?.error) {
-        setError('Invalid collegiate email or password. Please verify credentials.');
+        setError('Invalid collegiate email or password. Please verify your credentials.');
         setLoading(false);
       } else {
-        // Redirect based on role or callbackUrl
         if (email.includes('security') || email.includes('admin')) {
           router.push('/admin');
         } else {
@@ -52,7 +41,7 @@ function LoginForm() {
         }
         router.refresh();
       }
-    } catch (err: any) {
+    } catch {
       setError('An error occurred during authentication. Please try again.');
       setLoading(false);
     }
@@ -80,75 +69,131 @@ function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
-      <Navbar />
+    <div className="app flex flex-col min-h-screen">
+      <Header />
 
-      <main className="flex-1 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8 bg-white p-8 sm:p-10 rounded-3xl border border-slate-200/90 shadow-xl shadow-slate-200/50 animate-in fade-in zoom-in-95 duration-200">
-          
-          {/* Header */}
-          <div className="text-center">
-            <div className="h-14 w-14 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center mx-auto mb-4 shadow-xs">
-              <Compass className="h-7 w-7" />
+      <main className="flex-1 flex items-center justify-center py-16 px-4">
+        <div
+          style={{
+            width: '100%',
+            maxWidth: '460px',
+            background: 'var(--paper)',
+            border: '1px solid var(--line)',
+            borderRadius: '24px',
+            boxShadow: 'var(--shadow)',
+            padding: '38px 32px',
+          }}
+        >
+          {/* Header Badge & Title */}
+          <div className="text-center" style={{ marginBottom: '28px' }}>
+            <div
+              style={{
+                width: '52px',
+                height: '52px',
+                margin: '0 auto 16px',
+                display: 'grid',
+                placeItems: 'center',
+                borderRadius: '16px',
+                background: 'var(--blue-soft)',
+                color: 'var(--blue)',
+              }}
+            >
+              <Icon name="shield" size={26} />
             </div>
-            <h2 className="text-2xl font-black text-slate-900 tracking-tight">
-              Sign in to Campus<span className="text-indigo-600">Find</span>
-            </h2>
-            <p className="text-xs text-slate-500 mt-2">
-              University single-sign-on &amp; credentials portal for students, staff, and security.
+            <span className="eyebrow" style={{ marginBottom: '10px' }}>
+              <span><Icon name="sparkle" size={13} /></span> Secure Access
+            </span>
+            <h1
+              style={{
+                margin: '8px 0 6px',
+                font: "800 28px 'Manrope', sans-serif",
+                color: 'var(--navy)',
+                letterSpacing: '-1px',
+              }}
+            >
+              Sign in to campus<strong>find</strong>
+            </h1>
+            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '13px', lineHeight: '1.5' }}>
+              University single sign-on for students, staff, and campus safety.
             </p>
           </div>
 
-          {/* Password Updated Banner */}
+          {/* Success Banner */}
           {searchParams.get('updated') === 'true' && (
-            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl text-xs flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+            <div
+              style={{
+                marginBottom: '20px',
+                padding: '12px 16px',
+                borderRadius: '12px',
+                background: 'var(--teal-soft)',
+                border: '1px solid var(--teal)',
+                color: 'var(--teal-dark)',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontWeight: 600,
+              }}
+            >
+              <Icon name="check" size={16} />
               <span>Password updated successfully. Please log in with your new credentials.</span>
             </div>
           )}
 
           {/* Error Banner */}
           {error && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-2xl text-xs flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0" />
+            <div
+              style={{
+                marginBottom: '20px',
+                padding: '12px 16px',
+                borderRadius: '12px',
+                background: 'var(--coral-soft)',
+                border: '1px solid var(--coral)',
+                color: 'var(--coral-dark)',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontWeight: 600,
+              }}
+            >
+              <Icon name="x" size={16} />
               <span>{error}</span>
             </div>
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Collegiate Email Address
+          <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '16px' }}>
+            <div className="field" style={{ margin: 0 }}>
+              <label>
+                Collegiate Email
+                <b>Required</b>
               </label>
-              <div className="relative">
-                <Mail className="h-4 w-4 text-slate-400 absolute left-3.5 top-3.5" />
+              <div className="input-wrap" style={{ margin: 0 }}>
+                <Icon name="user" size={17} />
                 <input
                   type="email"
                   required
                   placeholder="student@campus.edu"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full text-xs font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all"
                 />
               </div>
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Password
-                </label>
-              </div>
-              <div className="relative">
-                <Lock className="h-4 w-4 text-slate-400 absolute left-3.5 top-3.5" />
+            <div className="field" style={{ margin: 0 }}>
+              <label>
+                Password
+                <b>Required</b>
+              </label>
+              <div className="input-wrap" style={{ margin: 0 }}>
+                <Icon name="key" size={17} />
                 <input
                   type="password"
                   required
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full text-xs font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all"
                 />
               </div>
             </div>
@@ -156,66 +201,107 @@ function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 px-4 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-95 transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className="button button-found"
+              style={{ width: '100%', marginTop: '8px', minHeight: '48px' }}
             >
               {loading ? (
                 <span>Authenticating...</span>
               ) : (
                 <>
                   <span>Sign In</span>
-                  <ArrowRight className="h-4 w-4" />
+                  <Icon name="arrow" size={16} />
                 </>
               )}
             </button>
           </form>
 
           {/* Quick Demo Logins */}
-          <div className="pt-4 border-t border-slate-100">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block text-center mb-3">
-              One-Click Role Demonstration
+          <div
+            style={{
+              marginTop: '28px',
+              paddingTop: '20px',
+              borderTop: '1px solid var(--line)',
+            }}
+          >
+            <span
+              style={{
+                display: 'block',
+                textAlign: 'center',
+                fontSize: '10px',
+                fontWeight: 800,
+                letterSpacing: '1px',
+                textTransform: 'uppercase',
+                color: 'var(--muted)',
+                marginBottom: '12px',
+              }}
+            >
+              One-Click Demo Profiles
             </span>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <button
                 type="button"
                 onClick={() => handleDemoLogin('maya.lin@campus.edu', '/dashboard')}
-                className="p-2.5 rounded-xl border border-indigo-200 bg-indigo-50/60 hover:bg-indigo-100 text-left transition-colors cursor-pointer"
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  border: '1px solid var(--line)',
+                  background: 'var(--paper)',
+                  textAlign: 'left',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '2px',
+                  transition: '0.2s',
+                  cursor: 'pointer',
+                }}
               >
-                <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-900">
-                  <UserCheck className="h-3.5 w-3.5 text-indigo-600" />
-                  <span>Student</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 800, color: 'var(--navy)' }}>
+                  <Icon name="user" size={14} /> Student
                 </div>
-                <div className="text-[10px] text-indigo-700/80 mt-0.5 truncate">
-                  Maya Lin
-                </div>
+                <div style={{ fontSize: '10px', color: 'var(--muted)' }}>Maya Lin</div>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleDemoLogin('vance.security@campus.edu', '/admin')}
-                className="p-2.5 rounded-xl border border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100 text-left transition-colors cursor-pointer"
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  border: '1px solid var(--line)',
+                  background: 'var(--paper)',
+                  textAlign: 'left',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '2px',
+                  transition: '0.2s',
+                  cursor: 'pointer',
+                }}
               >
-                <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900">
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                  <span>Security</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 800, color: 'var(--navy)' }}>
+                  <Icon name="shield" size={14} /> Security
                 </div>
-                <div className="text-[10px] text-emerald-700/80 mt-0.5 truncate">
-                  Officer Vance
-                </div>
+                <div style={{ fontSize: '10px', color: 'var(--muted)' }}>Officer Vance</div>
               </button>
             </div>
           </div>
 
-          {/* Registration Prompt */}
-          <div className="text-center pt-2">
-            <p className="text-xs text-slate-500">
+          {/* Registration link */}
+          <div style={{ textAlign: 'center', marginTop: '22px' }}>
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--muted)' }}>
               New campus student?{' '}
-              <Link href="/register" className="font-bold text-indigo-600 hover:text-indigo-700 underline">
+              <Link
+                href="/register"
+                style={{
+                  fontWeight: 700,
+                  color: 'var(--blue)',
+                  textDecoration: 'underline',
+                  marginLeft: '4px',
+                }}
+              >
                 Create an account
               </Link>
             </p>
           </div>
-
         </div>
       </main>
 
@@ -226,11 +312,15 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-slate-500 font-medium text-sm animate-pulse">Loading login portal...</div>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="app flex items-center justify-center min-h-screen">
+          <div style={{ color: 'var(--muted)', fontSize: '13px', fontWeight: 700 }}>
+            Loading login portal...
+          </div>
+        </div>
+      }
+    >
       <LoginForm />
     </Suspense>
   );

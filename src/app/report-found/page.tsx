@@ -2,86 +2,112 @@
 
 import React, { useState, useRef } from 'react';
 import Link from 'next/link';
-import { 
-  PlusCircle, 
-  ArrowLeft, 
-  UploadCloud, 
-  X, 
-  CheckCircle2, 
-  MapPin, 
-  Calendar, 
-  Clock, 
-  Tag, 
-  ShieldCheck, 
-  Info, 
-  Building2,
-  Sparkles,
-  Search,
-  LayoutDashboard,
-  Lock
-} from 'lucide-react';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
-import { CATEGORIES } from '@/lib/constants';
+import { Header } from '@/components/ui/Header';
+import { Footer } from '@/components/ui/Footer';
+import { Icon, type IconName } from '@/components/ui/Icon';
 import { CAMPUS_LOCATIONS } from '@/lib/campusLocations';
 import { submitFoundItemReport } from '@/app/actions/reportFound';
 
-interface FormState {
+interface FormData {
+  type: string;
+  customItem: string;
   itemName: string;
   category: string;
   description: string;
   location: string;
-  specificLocation: string;
+  specificPlace: string;
   dateFound: string;
   timeFound: string;
   storageLocation: string;
   customStorage: string;
 }
 
-interface FormErrors {
-  itemName?: string;
-  category?: string;
-  description?: string;
-  location?: string;
-  dateFound?: string;
-  timeFound?: string;
-  storageLocation?: string;
-}
+const itemTypes: { name: string; icon: IconName }[] = [
+  { name: 'Headphones', icon: 'headphones' },
+  { name: 'Wallet', icon: 'wallet' },
+  { name: 'Bottle', icon: 'bottle' },
+  { name: 'Phone', icon: 'phone' },
+  { name: 'Bag', icon: 'bag' },
+  { name: 'Keys', icon: 'key' },
+];
 
-const STORAGE_OPTIONS = [
+const quickLocations = [
+  { name: 'PCP', detail: 'Central academic block' },
+  { name: '6th Building', detail: 'Lecture halls & labs' },
+  { name: 'Hostels', detail: 'Student residences' },
+  { name: 'Architecture', detail: 'Studios & workshops' },
+];
+
+const CATEGORIES = [
+  'Electronics',
+  'IDs & Cards',
+  'Books & Notes',
+  'Keys & Access',
+  'Clothing & Accessories',
+  'Bags & Wallets',
+  'Bottles & Containers',
+  'Other',
+];
+
+const CUSTODY_OPTIONS = [
+  'Campus Safety Desk',
   'Turned in to Main Campus Security Desk',
   'Turned in to 6th Building Security / Reception Desk',
   'Turned in to PCP Department Office',
-  'Turned in to SBPIM(MBA) Office',
-  'Turned in to Architecture Building (5th Floor) Desk',
   'Turned in to Hostel Security Office',
   'With Finder (Holding temporarily until verified owner claims)',
   'Other Campus Location (Specify Below)',
 ];
 
 export default function ReportFoundPage() {
-  const [formData, setFormData] = useState<FormState>({
+  const [step, setStep] = useState(1);
+  const [form, setForm] = useState<FormData>({
+    type: 'Wallet',
+    customItem: '',
     itemName: '',
-    category: '',
+    category: 'Bags & Wallets',
     description: '',
-    location: '',
-    specificLocation: '',
-    dateFound: '',
+    location: 'PCP',
+    specificPlace: '',
+    dateFound: new Date().toISOString().split('T')[0],
     timeFound: '',
-    storageLocation: '',
+    storageLocation: 'Campus Safety Desk',
     customStorage: '',
   });
 
+  const [confirmed, setConfirmed] = useState(true);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [referenceId, setReferenceId] = useState('');
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const steps = ['Item', 'Details', 'Location', 'Review'];
 
-  // Handle Image Selection & Preview with strict file type and size validation
+  const update = (key: keyof FormData, value: string) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSelectType = (typeName: string) => {
+    update('type', typeName);
+    if (typeName !== 'Something else') {
+      if (!form.itemName || itemTypes.some((t) => form.itemName.toLowerCase().includes(t.name.toLowerCase()))) {
+        update('itemName', typeName);
+      }
+      if (typeName === 'Headphones' || typeName === 'Phone') {
+        update('category', 'Electronics');
+      } else if (typeName === 'Wallet' || typeName === 'Bag') {
+        update('category', 'Bags & Wallets');
+      } else if (typeName === 'Keys') {
+        update('category', 'Keys & Access');
+      } else if (typeName === 'Bottle') {
+        update('category', 'Bottles & Containers');
+      }
+    }
+  };
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -91,7 +117,6 @@ export default function ReportFoundPage() {
         if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
-
       if (file.size > 5 * 1024 * 1024) {
         alert('Image file size exceeds 5MB limit. Please upload a smaller file.');
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -108,632 +133,677 @@ export default function ReportFoundPage() {
   };
 
   const handleRemoveImage = () => {
-    if (imagePreview) {
-      URL.revokeObjectURL(imagePreview);
-    }
     setImageFile(null);
     setImagePreview(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // Form Validation
-  const validateForm = (): boolean => {
-    const newErrors: FormErrors = {};
+  const selectedName = form.type === 'Something else' ? (form.customItem || 'Item') : form.type;
 
-    if (!formData.itemName.trim()) {
-      newErrors.itemName = 'Item name is required.';
-    }
-    if (!formData.category) {
-      newErrors.category = 'Please select an item category.';
-    }
-    if (!formData.description.trim()) {
-      newErrors.description = 'Please describe the found item.';
-    } else if (formData.description.trim().length < 10) {
-      newErrors.description = 'Description should be at least 10 characters.';
-    }
-    if (!formData.location) {
-      newErrors.location = 'Please select the campus building or area where it was found.';
-    }
-    if (!formData.dateFound) {
-      newErrors.dateFound = 'Date found is required.';
-    }
-    if (!formData.timeFound) {
-      newErrors.timeFound = 'Approximate time found is required.';
-    }
-    if (!formData.storageLocation) {
-      newErrors.storageLocation = 'Please select where the item is currently held.';
-    }
+  const nextDisabled =
+    (step === 1 &&
+      (!form.type || (form.type === 'Something else' && !form.customItem.trim()))) ||
+    (step === 2 &&
+      (!form.itemName.trim() ||
+        form.itemName.trim().length < 2 ||
+        !form.description.trim() ||
+        form.description.trim().length < 10)) ||
+    (step === 3 &&
+      (!form.location ||
+        !form.dateFound ||
+        !form.storageLocation ||
+        (form.storageLocation === 'Other Campus Location (Specify Below)' && !form.customStorage.trim()))) ||
+    (step === 4 && (!confirmed || isSubmitting));
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+  const effectiveStorage =
+    form.storageLocation === 'Other Campus Location (Specify Below)'
+      ? form.customStorage.trim() || 'Specified by finder'
+      : form.storageLocation;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) {
-      const firstError = document.querySelector('[data-has-error="true"]');
-      if (firstError) {
-        firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-      return;
-    }
-
+  const handleSubmit = async () => {
     setIsSubmitting(true);
+    setSubmitError(null);
 
     try {
+      const finalName = form.itemName.trim() || (form.type === 'Something else' ? form.customItem.trim() : form.type);
       const result = await submitFoundItemReport({
-        itemName: formData.itemName,
-        category: formData.category,
-        description: formData.description,
-        location: formData.location,
-        specificLocation: formData.specificLocation,
-        dateFound: formData.dateFound,
-        timeFound: formData.timeFound,
-        storageLocation: formData.storageLocation,
-        customStorage: formData.customStorage,
+        itemName: finalName,
+        category: form.category,
+        description: form.description.trim(),
+        location: form.location,
+        specificLocation: form.specificPlace.trim(),
+        dateFound: form.dateFound,
+        timeFound: form.timeFound.trim(),
+        storageLocation: form.storageLocation,
+        customStorage: form.customStorage.trim(),
         image: imagePreview,
       });
 
       if (result.success && result.item) {
         setReferenceId(result.item.id);
-        setIsSubmitted(true);
+        setSubmitted(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
-        alert(result.error || 'Failed to submit report. Please check the fields.');
+        setSubmitError(result.error || 'Failed to submit report. Please check your fields and sign in.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('An unexpected error occurred. Please try again.');
+      setSubmitError(err?.message || 'An unexpected error occurred. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleReset = () => {
-    setFormData({
+    setForm({
+      type: 'Wallet',
+      customItem: '',
       itemName: '',
-      category: '',
+      category: 'Bags & Wallets',
       description: '',
-      location: '',
-      specificLocation: '',
-      dateFound: '',
+      location: 'PCP',
+      specificPlace: '',
+      dateFound: new Date().toISOString().split('T')[0],
       timeFound: '',
-      storageLocation: '',
+      storageLocation: 'Campus Safety Desk',
       customStorage: '',
     });
     handleRemoveImage();
-    setErrors({});
-    setIsSubmitted(false);
+    setStep(1);
+    setSubmitted(false);
     setReferenceId('');
+    setSubmitError(null);
   };
 
-  const effectiveStorage = formData.storageLocation === 'Other Campus Location (Specify Below)' 
-    ? (formData.customStorage || 'Specified by finder') 
-    : formData.storageLocation;
+  const activeIcon = itemTypes.find((item) => item.name === form.type)?.icon || 'sparkle';
+
+  const formattedRef = referenceId
+    ? (referenceId.startsWith('CF-') ? referenceId : `CF-F-${referenceId.slice(-4).toUpperCase()}`)
+    : 'CF-F-2048';
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
-      <Navbar />
+    <div className="app">
+      <Header />
 
-      <main className="flex-1 py-10 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto w-full">
-        
-        {/* Breadcrumb Navigation */}
-        <nav className="flex items-center gap-2 text-xs text-slate-500 mb-6">
-          <Link href="/" className="hover:text-indigo-600 transition-colors">
-            Home
-          </Link>
-          <span>/</span>
-          <Link href="/dashboard" className="hover:text-indigo-600 transition-colors">
-            Student Dashboard
-          </Link>
-          <span>/</span>
-          <span className="text-slate-900 font-semibold">Report Found Item</span>
-        </nav>
-
-        {isSubmitted ? (
-          /* SUCCESS SCREEN */
-          <div className="bg-white rounded-3xl border border-slate-200/90 p-8 sm:p-12 shadow-xl shadow-slate-200/50 text-center animate-in zoom-in-95 duration-200 max-w-2xl mx-auto">
-            <div className="h-20 w-20 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-6 shadow-inner">
-              <CheckCircle2 className="h-11 w-11" />
+      {submitted ? (
+        <main className="report-layout found">
+          <section className="success-state">
+            <div className="success-art">
+              <span className="success-ring ring-one" />
+              <span className="success-ring ring-two" />
+              <div className="success-icon">
+                <Icon name="check" size={42} />
+              </div>
+              <div className="success-card mini-a">
+                <Icon name="sparkle" size={17} /> Report verified
+              </div>
+              <div className="success-card mini-b">
+                <Icon name="shield" size={17} /> Campus Safety
+              </div>
             </div>
-
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 mb-3">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Found Item Registered in Public Registry
-            </span>
-
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              Thank You for Your Honesty! 🎉
-            </h1>
-
-            <p className="text-slate-600 text-sm mt-3 leading-relaxed max-w-lg mx-auto">
-              Your turn-in report for <span className="font-semibold text-slate-800">{formData.itemName}</span> has been logged. Students searching for matching lost items can now discover and submit ownership claims.
+            <span className="section-kicker">Thank you for helping</span>
+            <h1>Found report submitted</h1>
+            <p>
+              Campus Safety will help keep the item secure while we match and connect with its verified owner.
             </p>
-
-            {/* Reference Card */}
-            <div className="mt-6 p-4 bg-slate-50 rounded-2xl border border-slate-200 max-w-md mx-auto text-left">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-                <span className="text-xs text-slate-500 font-medium">Tracking Reference Number</span>
-                <span className="text-sm font-mono font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200">
-                  {referenceId}
-                </span>
+            <div className="success-reference">
+              Tracking Reference <strong>{formattedRef}</strong>
+            </div>
+            <div className="success-actions">
+              <Link href="/dashboard" className="button button-found">
+                View My Reports <Icon name="arrow" size={17} />
+              </Link>
+              <button className="button button-quiet" onClick={handleReset}>
+                Report another item
+              </button>
+              <Link href="/" className="button button-quiet">
+                Back to home
+              </Link>
+            </div>
+          </section>
+        </main>
+      ) : (
+        <main className="report-layout found">
+          <aside className="report-aside">
+            <Link href="/" className="back-link">
+              <Icon name="arrow" size={18} /> Back to home
+            </Link>
+            <span className="report-tag">Found item report</span>
+            <h1>Help someone get it back.</h1>
+            <p>
+              A few key details can reconnect an unattended item with the person desperately searching for it on campus.
+            </p>
+            <div className="aside-illustration">
+              <div className="aside-building">
+                <Icon name="building" size={56} />
               </div>
-
-              <div className="pt-3 space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Item:</span>
-                  <span className="font-semibold text-slate-800">{formData.itemName}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Category:</span>
-                  <span className="font-medium text-slate-700">{formData.category}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Found At:</span>
-                  <span className="font-medium text-slate-700">{formData.location}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Current Storage:</span>
-                  <span className="font-medium text-emerald-700 text-right max-w-[200px] truncate">
-                    {effectiveStorage}
-                  </span>
-                </div>
-                {imagePreview && (
-                  <div className="pt-2 flex items-center gap-3">
-                    <span className="text-slate-500">Attached Photo:</span>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img 
-                      src={imagePreview} 
-                      alt="Uploaded found item" 
-                      className="h-10 w-10 object-cover rounded-lg border border-slate-200" 
-                    />
-                  </div>
-                )}
+              <span className="path-dot p1" />
+              <span className="path-dot p2" />
+              <span className="path-dot p3" />
+              <div className="aside-item">
+                <Icon name="wallet" size={36} />
               </div>
             </div>
-
-            {/* Drop-off Guidance */}
-            <div className="mt-6 p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-100 text-xs text-indigo-900 max-w-md mx-auto text-left flex items-start gap-2.5">
-              <Building2 className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
+            <div className="privacy-note">
+              <Icon name="shield" size={18} />
               <span>
-                If you still have the item in your possession, please deposit it at the <strong>Main Campus Security Desk (Building 4, Room 102)</strong> or the nearest building receptionist.
+                <strong>Your privacy is protected</strong>
+                <small>Finder contacts are only shared with verified claimants with your consent.</small>
               </span>
             </div>
+          </aside>
 
-            {/* Navigation Actions */}
-            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-              <Link
-                href="/dashboard"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20 active:scale-95 transition-all"
-              >
-                <LayoutDashboard className="h-4 w-4" />
-                View in Student Dashboard
-              </Link>
-              <Link
-                href="/#browse"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 transition-all"
-              >
-                <Search className="h-4 w-4 text-indigo-500" />
-                Browse Registry
-              </Link>
-              <button
-                type="button"
-                onClick={handleReset}
-                className="w-full sm:w-auto px-4 py-3 text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors"
-              >
-                Report Another Item
-              </button>
+          <section className="report-main">
+            <div className="progress-wrap">
+              <div className="progress-label">
+                <span>Report progress</span>
+                <strong>{step} of 4</strong>
+              </div>
+              <div className="progress-steps">
+                {steps.map((label, index) => (
+                  <button
+                    key={label}
+                    type="button"
+                    className={`${step === index + 1 ? 'active' : ''} ${
+                      step > index + 1 ? 'complete' : ''
+                    }`}
+                    onClick={() => index + 1 < step && setStep(index + 1)}
+                  >
+                    <i>
+                      {step > index + 1 ? (
+                        <Icon name="check" size={14} />
+                      ) : (
+                        `0${index + 1}`
+                      )}
+                    </i>
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        ) : (
-          /* REPORT FORM */
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            {/* Main Form (2 cols) */}
-            <div className="lg:col-span-2">
-              <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-8 shadow-xs">
-                
-                {/* Header */}
-                <div className="flex items-center gap-3 mb-6 pb-6 border-b border-slate-100">
-                  <div className="h-12 w-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
-                    <PlusCircle className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-                      Register a Found Item
-                    </h1>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Log details of an unattended item you discovered on campus so the owner can be identified.
-                    </p>
-                  </div>
-                </div>
 
-                <form onSubmit={handleSubmit} noValidate className="space-y-6">
-                  
-                  {/* 1. Item Name */}
-                  <div data-has-error={!!errors.itemName}>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      Item Name <span className="text-rose-500">*</span>
+            <div className="form-panel">
+              {submitError && (
+                <div
+                  style={{
+                    padding: '14px 18px',
+                    marginBottom: '24px',
+                    borderRadius: '12px',
+                    background: '#fbeae8',
+                    border: '1px solid #f2b8b5',
+                    color: '#9c2f2f',
+                    fontSize: '13px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                  }}
+                >
+                  <Icon name="sparkle" size={18} />
+                  <span>{submitError}</span>
+                </div>
+              )}
+
+              {/* Step 1: Item Type */}
+              {step === 1 && (
+                <div className="form-step">
+                  <span className="form-kicker">Step 01</span>
+                  <h2>What did you find?</h2>
+                  <p>Choose the closest item type. You can add specific description details next.</p>
+                  <div className="item-grid">
+                    {itemTypes.map((item) => (
+                      <button
+                        key={item.name}
+                        type="button"
+                        className={
+                          form.type === item.name
+                            ? 'item-option selected'
+                            : 'item-option'
+                        }
+                        onClick={() => handleSelectType(item.name)}
+                      >
+                        <span>
+                          <Icon name={item.icon} size={29} />
+                        </span>
+                        <strong>{item.name}</strong>
+                        {form.type === item.name && (
+                          <i>
+                            <Icon name="check" size={13} />
+                          </i>
+                        )}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      className={
+                        form.type === 'Something else'
+                          ? 'item-option custom selected'
+                          : 'item-option custom'
+                      }
+                      onClick={() => handleSelectType('Something else')}
+                    >
+                      <span className="ellipsis">•••</span>
+                      <strong>Something else</strong>
+                      {form.type === 'Something else' && (
+                        <i>
+                          <Icon name="check" size={13} />
+                        </i>
+                      )}
+                    </button>
+                  </div>
+                  {form.type === 'Something else' && (
+                    <div className="custom-reveal">
+                      <label htmlFor="custom-item">What did you find?</label>
+                      <div className="input-wrap">
+                        <Icon name="sparkle" size={18} />
+                        <input
+                          id="custom-item"
+                          autoFocus
+                          value={form.customItem}
+                          onChange={(e) => {
+                            update('customItem', e.target.value);
+                            update('itemName', e.target.value);
+                          }}
+                          placeholder="e.g. Scientific calculator, ID Card, Notebook..."
+                        />
+                      </div>
+                      <small>
+                        Anything is welcome — unusual items are often the easiest to match!
+                      </small>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Step 2: Details */}
+              {step === 2 && (
+                <div className="form-step">
+                  <span className="form-kicker">Step 02</span>
+                  <h2>Tell us the useful details.</h2>
+                  <p>
+                    Distinctive information helps owners identify their belonging on the registry.
+                  </p>
+                  <div className="field">
+                    <label htmlFor="item-name">
+                      Item name <b>Required</b>
                     </label>
                     <input
-                      type="text"
-                      placeholder="e.g. Texas Instruments Calculator, Hydro Flask, Set of Keys"
-                      value={formData.itemName}
-                      onChange={(e) => {
-                        setFormData({ ...formData, itemName: e.target.value });
-                        if (errors.itemName) setErrors({ ...errors, itemName: undefined });
-                      }}
-                      className={`w-full text-xs px-3.5 py-2.5 rounded-xl border bg-slate-50/50 transition-colors focus:bg-white focus:outline-none ${
-                        errors.itemName
-                          ? 'border-rose-400 bg-rose-50/30 focus:border-rose-500 text-rose-900'
-                          : 'border-slate-200 focus:border-indigo-500'
-                      }`}
+                      id="item-name"
+                      value={form.itemName}
+                      onChange={(e) => update('itemName', e.target.value)}
+                      placeholder={
+                        form.type === 'Wallet'
+                          ? 'e.g. Brown leather wallet with student ID'
+                          : `Describe the ${selectedName.toLowerCase()}`
+                      }
                     />
-                    {errors.itemName && (
-                      <p className="text-[11px] font-medium text-rose-600 mt-1 flex items-center gap-1">
-                        <Info className="h-3 w-3" />
-                        {errors.itemName}
-                      </p>
-                    )}
                   </div>
 
-                  {/* 2. Category */}
-                  <div data-has-error={!!errors.category}>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      Category <span className="text-rose-500">*</span>
-                    </label>
-                    <select
-                      value={formData.category}
-                      onChange={(e) => {
-                        setFormData({ ...formData, category: e.target.value });
-                        if (errors.category) setErrors({ ...errors, category: undefined });
-                      }}
-                      className={`w-full text-xs px-3.5 py-2.5 rounded-xl border bg-slate-50/50 transition-colors focus:bg-white focus:outline-none cursor-pointer ${
-                        errors.category
-                          ? 'border-rose-400 bg-rose-50/30 focus:border-rose-500'
-                          : 'border-slate-200 focus:border-indigo-500'
-                      }`}
-                    >
-                      <option value="">-- Select Item Category --</option>
-                      {CATEGORIES.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                    </select>
-                    {errors.category && (
-                      <p className="text-[11px] font-medium text-rose-600 mt-1 flex items-center gap-1">
-                        <Info className="h-3 w-3" />
-                        {errors.category}
-                      </p>
-                    )}
+                  <div className="field">
+                    <label htmlFor="category">Category <b>Required</b></label>
+                    <div className="select-wrap">
+                      <select
+                        id="category"
+                        value={form.category}
+                        onChange={(e) => update('category', e.target.value)}
+                      >
+                        {CATEGORIES.map((category) => (
+                          <option key={category} value={category}>
+                            {category}
+                          </option>
+                        ))}
+                      </select>
+                      <Icon name="chevron" size={17} />
+                    </div>
                   </div>
 
-                  {/* 3. Description */}
-                  <div data-has-error={!!errors.description}>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      Description <span className="text-rose-500">*</span>
+                  <div className="field">
+                    <label htmlFor="description">
+                      Description <b>Required (min 10 characters)</b>
                     </label>
                     <textarea
-                      rows={3}
-                      placeholder="Describe color, brand, condition, visible case, or general appearance..."
-                      value={formData.description}
-                      onChange={(e) => {
-                        setFormData({ ...formData, description: e.target.value });
-                        if (errors.description) setErrors({ ...errors, description: undefined });
-                      }}
-                      className={`w-full text-xs px-3.5 py-2.5 rounded-xl border bg-slate-50/50 transition-colors focus:bg-white focus:outline-none ${
-                        errors.description
-                          ? 'border-rose-400 bg-rose-50/30 focus:border-rose-500 text-rose-900'
-                          : 'border-slate-200 focus:border-indigo-500'
-                      }`}
+                      id="description"
+                      value={form.description}
+                      onChange={(e) => update('description', e.target.value)}
+                      placeholder="Color, brand, condition, visible case, keychain, or general appearance…"
+                      rows={4}
                     />
-                    {errors.description && (
-                      <p className="text-[11px] font-medium text-rose-600 mt-1 flex items-center gap-1">
-                        <Info className="h-3 w-3" />
-                        {errors.description}
-                      </p>
-                    )}
+                    <small>
+                      Avoid listing confidential details like specific debit card numbers or bank keys.
+                    </small>
                   </div>
 
-                  {/* 4. Photo Upload with Live Preview */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      Photo Upload (Optional but Recommended)
+                  <div className="field">
+                    <label htmlFor="photo">
+                      Photo Upload <span>Optional</span>
                     </label>
-
                     {imagePreview ? (
-                      /* Image Preview Box */
-                      <div className="relative border border-emerald-200 bg-emerald-50/30 rounded-2xl p-4 flex items-center gap-4">
-                        <div className="relative h-20 w-20 rounded-xl overflow-hidden border border-slate-200 shrink-0 bg-white">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={imagePreview}
-                            alt="Found item preview"
-                            className="h-full w-full object-cover"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0 text-xs">
-                          <p className="font-semibold text-slate-800 truncate">
-                            {imageFile?.name}
-                          </p>
-                          <p className="text-slate-500 text-[11px] mt-0.5">
-                            {imageFile ? (imageFile.size / 1024).toFixed(1) + ' KB' : ''} • Image loaded
-                          </p>
-                          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded-md mt-1">
-                            <CheckCircle2 className="h-3 w-3" /> Attached to found registry
-                          </span>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '14px',
+                          padding: '12px',
+                          borderRadius: '12px',
+                          border: '1px solid var(--line)',
+                          background: 'var(--paper)',
+                        }}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={imagePreview}
+                          alt="Uploaded found item"
+                          style={{
+                            width: '56px',
+                            height: '56px',
+                            borderRadius: '10px',
+                            objectFit: 'cover',
+                            border: '1px solid var(--line)',
+                          }}
+                        />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <strong style={{ fontSize: '12px', color: 'var(--navy)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                            {imageFile?.name || 'Found item photo attached'}
+                          </strong>
+                          <small style={{ color: 'var(--muted)', fontSize: '10px' }}>
+                            {imageFile ? `${(imageFile.size / 1024).toFixed(1)} KB` : 'Attached to registry'}
+                          </small>
                         </div>
                         <button
                           type="button"
                           onClick={handleRemoveImage}
-                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0"
-                          title="Remove image"
+                          className="button button-quiet"
+                          style={{ minHeight: '36px', padding: '0 12px', fontSize: '11px' }}
                         >
-                          <X className="h-5 w-5" />
+                          Remove
                         </button>
                       </div>
                     ) : (
-                      /* Upload Dropzone */
                       <div
                         onClick={() => fileInputRef.current?.click()}
-                        className="border-2 border-dashed border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/20 rounded-2xl p-6 text-center transition-colors cursor-pointer group"
+                        style={{
+                          border: '2px dashed var(--line)',
+                          borderRadius: '12px',
+                          padding: '24px 16px',
+                          textAlign: 'center',
+                          cursor: 'pointer',
+                          background: 'rgba(246, 237, 223, 0.4)',
+                        }}
                       >
                         <input
                           type="file"
                           ref={fileInputRef}
                           onChange={handleImageChange}
                           accept="image/png, image/jpeg, image/webp"
-                          className="hidden"
+                          style={{ display: 'none' }}
                         />
-                        <div className="h-10 w-10 rounded-xl bg-slate-100 group-hover:bg-emerald-100 text-slate-500 group-hover:text-emerald-600 flex items-center justify-center mx-auto mb-2 transition-colors">
-                          <UploadCloud className="h-5 w-5" />
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                          <Icon name="sparkle" size={24} />
+                          <strong style={{ fontSize: '12px', color: 'var(--navy)' }}>
+                            Click to attach a photo
+                          </strong>
+                          <small style={{ fontSize: '10px', color: 'var(--muted)' }}>
+                            PNG, JPG, or WEBP up to 5MB
+                          </small>
                         </div>
-                        <p className="text-xs font-semibold text-slate-800 group-hover:text-emerald-600 transition-colors">
-                          Click or drag image to upload
-                        </p>
-                        <p className="text-[11px] text-slate-400 mt-1">
-                          PNG, JPG, or WEBP up to 5MB
-                        </p>
                       </div>
                     )}
                   </div>
+                </div>
+              )}
 
-                  {/* 5. Location Found */}
-                  <div data-has-error={!!errors.location}>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      Campus Location Found <span className="text-rose-500">*</span>
+              {/* Step 3: Location */}
+              {step === 3 && (
+                <div className="form-step">
+                  <span className="form-kicker">Step 03</span>
+                  <h2>Where and when did you find it?</h2>
+                  <p>Choose a campus zone first, then specify the room or custody drop point.</p>
+                  
+                  <fieldset className="location-options">
+                    <legend>
+                      Campus location <b>Required</b>
+                    </legend>
+                    {quickLocations.map((location) => (
+                      <button
+                        key={location.name}
+                        type="button"
+                        className={form.location === location.name ? 'selected' : ''}
+                        onClick={() => update('location', location.name)}
+                      >
+                        <span>
+                          <Icon name="building" size={22} />
+                        </span>
+                        <div>
+                          <strong>{location.name}</strong>
+                          <small>{location.detail}</small>
+                        </div>
+                        {form.location === location.name && (
+                          <i>
+                            <Icon name="check" size={13} />
+                          </i>
+                        )}
+                      </button>
+                    ))}
+                  </fieldset>
+
+                  <div className="field">
+                    <label htmlFor="all-locations">
+                      Full Campus Building / Area <b>Required</b>
                     </label>
-                    <select
-                      value={formData.location}
-                      onChange={(e) => {
-                        setFormData({ ...formData, location: e.target.value });
-                        if (errors.location) setErrors({ ...errors, location: undefined });
-                      }}
-                      className={`w-full text-xs px-3.5 py-2.5 rounded-xl border bg-slate-50/50 transition-colors focus:bg-white focus:outline-none cursor-pointer ${
-                        errors.location
-                          ? 'border-rose-400 bg-rose-50/30 focus:border-rose-500'
-                          : 'border-slate-200 focus:border-indigo-500'
-                      }`}
-                    >
-                      <option value="">-- Select Campus Building / Area --</option>
-                      {CAMPUS_LOCATIONS.filter((l) => l !== 'All Locations').map((loc) => (
-                        <option key={loc} value={loc}>
-                          {loc}
-                        </option>
-                      ))}
-                    </select>
-                    {errors.location && (
-                      <p className="text-[11px] font-medium text-rose-600 mt-1 flex items-center gap-1">
-                        <Info className="h-3 w-3" />
-                        {errors.location}
-                      </p>
-                    )}
+                    <div className="select-wrap">
+                      <select
+                        id="all-locations"
+                        value={form.location}
+                        onChange={(e) => update('location', e.target.value)}
+                      >
+                        <option value="">-- Select Campus Building / Zone --</option>
+                        {CAMPUS_LOCATIONS.filter((l) => l !== 'All Locations').map((loc) => (
+                          <option key={loc} value={loc}>
+                            {loc}
+                          </option>
+                        ))}
+                      </select>
+                      <Icon name="chevron" size={17} />
+                    </div>
+                  </div>
 
+                  <div className="form-two-col">
+                    <div className="field">
+                      <label htmlFor="specific">
+                        Specific place <span>Optional</span>
+                      </label>
+                      <input
+                        id="specific"
+                        value={form.specificPlace}
+                        onChange={(e) => update('specificPlace', e.target.value)}
+                        placeholder="e.g. Room 204, Library 2nd floor"
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="date">
+                        Date Found <b>Required</b>
+                      </label>
+                      <input
+                        id="date"
+                        type="date"
+                        max={new Date().toISOString().split('T')[0]}
+                        value={form.dateFound}
+                        onChange={(e) => update('dateFound', e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="field">
+                    <label htmlFor="time">
+                      Approximate Time <span>Optional</span>
+                    </label>
                     <input
-                      type="text"
-                      placeholder="Specific room, floor, or spot (e.g. Room 204, 6th Building)"
-                      value={formData.specificLocation}
-                      onChange={(e) => setFormData({ ...formData, specificLocation: e.target.value })}
-                      className="mt-2 w-full text-xs px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50/30 focus:bg-white focus:outline-none focus:border-indigo-500"
+                      id="time"
+                      value={form.timeFound}
+                      onChange={(e) => update('timeFound', e.target.value)}
+                      placeholder="e.g. 11:15 AM or around lunchtime"
                     />
                   </div>
 
-                  {/* 6. Date Found & 7. Time Found */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div data-has-error={!!errors.dateFound}>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                        Date Found <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="date"
-                        max={new Date().toISOString().split('T')[0]}
-                        value={formData.dateFound}
-                        onChange={(e) => {
-                          setFormData({ ...formData, dateFound: e.target.value });
-                          if (errors.dateFound) setErrors({ ...errors, dateFound: undefined });
-                        }}
-                        className={`w-full text-xs px-3.5 py-2.5 rounded-xl border bg-slate-50/50 transition-colors focus:bg-white focus:outline-none ${
-                          errors.dateFound
-                            ? 'border-rose-400 bg-rose-50/30 focus:border-rose-500 text-rose-900'
-                            : 'border-slate-200 focus:border-indigo-500'
-                        }`}
-                      />
-                      {errors.dateFound && (
-                        <p className="text-[11px] font-medium text-rose-600 mt-1 flex items-center gap-1">
-                          <Info className="h-3 w-3" />
-                          {errors.dateFound}
-                        </p>
-                      )}
-                    </div>
-
-                    <div data-has-error={!!errors.timeFound}>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                        Approximate Time Found <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 11:15 AM or around lunch time"
-                        value={formData.timeFound}
-                        onChange={(e) => {
-                          setFormData({ ...formData, timeFound: e.target.value });
-                          if (errors.timeFound) setErrors({ ...errors, timeFound: undefined });
-                        }}
-                        className={`w-full text-xs px-3.5 py-2.5 rounded-xl border bg-slate-50/50 transition-colors focus:bg-white focus:outline-none ${
-                          errors.timeFound
-                            ? 'border-rose-400 bg-rose-50/30 focus:border-rose-500 text-rose-900'
-                            : 'border-slate-200 focus:border-indigo-500'
-                        }`}
-                      />
-                      {errors.timeFound && (
-                        <p className="text-[11px] font-medium text-rose-600 mt-1 flex items-center gap-1">
-                          <Info className="h-3 w-3" />
-                          {errors.timeFound}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 8. Current Storage Location (Requested) */}
-                  <div data-has-error={!!errors.storageLocation}>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      Current Custody / Storage Location <span className="text-rose-500">*</span>
+                  <div className="field">
+                    <label htmlFor="custody">
+                      Custody / Drop-off Point <b>Required</b>
                     </label>
-                    <select
-                      value={formData.storageLocation}
-                      onChange={(e) => {
-                        setFormData({ ...formData, storageLocation: e.target.value });
-                        if (errors.storageLocation) setErrors({ ...errors, storageLocation: undefined });
-                      }}
-                      className={`w-full text-xs px-3.5 py-2.5 rounded-xl border bg-slate-50/50 transition-colors focus:bg-white focus:outline-none cursor-pointer ${
-                        errors.storageLocation
-                          ? 'border-rose-400 bg-rose-50/30 focus:border-rose-500'
-                          : 'border-slate-200 focus:border-indigo-500'
-                      }`}
-                    >
-                      <option value="">-- Where is the item currently stored? --</option>
-                      {STORAGE_OPTIONS.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                    {errors.storageLocation && (
-                      <p className="text-[11px] font-medium text-rose-600 mt-1 flex items-center gap-1">
-                        <Info className="h-3 w-3" />
-                        {errors.storageLocation}
-                      </p>
-                    )}
+                    <div className="select-wrap">
+                      <select
+                        id="custody"
+                        value={form.storageLocation}
+                        onChange={(e) => update('storageLocation', e.target.value)}
+                      >
+                        {CUSTODY_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                      <Icon name="chevron" size={17} />
+                    </div>
 
-                    {formData.storageLocation === 'Other Campus Location (Specify Below)' && (
+                    {form.storageLocation === 'Other Campus Location (Specify Below)' && (
                       <input
                         type="text"
-                        required
-                        placeholder="Please specify current holding place or department office..."
-                        value={formData.customStorage}
-                        onChange={(e) => setFormData({ ...formData, customStorage: e.target.value })}
-                        className="mt-2 w-full text-xs px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50/30 focus:bg-white focus:outline-none focus:border-indigo-500"
+                        style={{ marginTop: '8px' }}
+                        placeholder="Please specify holding office or location..."
+                        value={form.customStorage}
+                        onChange={(e) => update('customStorage', e.target.value)}
                       />
                     )}
-
-                    <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1">
-                      <Lock className="h-3 w-3 text-slate-400 shrink-0" />
-                      For items held with finders, Campus Security will verify the claimant before connecting parties.
-                    </p>
                   </div>
+                </div>
+              )}
 
-                  {/* Submit Button */}
-                  <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
-                    <Link
-                      href="/"
-                      className="px-5 py-3 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
-                    >
-                      Cancel
-                    </Link>
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="inline-flex items-center justify-center gap-2 px-8 py-3 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/25 active:scale-95 disabled:opacity-70 transition-all cursor-pointer"
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <div className="h-4 w-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                          <span>Registering Item...</span>
-                        </>
-                      ) : (
-                        <>
-                          <PlusCircle className="h-4 w-4" />
-                          <span>Register Found Item</span>
-                        </>
+              {/* Step 4: Review */}
+              {step === 4 && (
+                <div className="form-step">
+                  <span className="form-kicker">Step 04</span>
+                  <h2>Review your report.</h2>
+                  <p>
+                    Make sure everything looks right. You can go back to update any section.
+                  </p>
+                  <div className="review-card">
+                    <div className="review-head">
+                      <span>
+                        <Icon name={activeIcon} size={28} />
+                      </span>
+                      <div>
+                        <small>Found item</small>
+                        <h3>{form.itemName || selectedName}</h3>
+                      </div>
+                      <button type="button" onClick={() => setStep(2)}>
+                        Edit
+                      </button>
+                    </div>
+                    <dl>
+                      <div>
+                        <dt>Category</dt>
+                        <dd>{form.category}</dd>
+                      </div>
+                      <div>
+                        <dt>Location</dt>
+                        <dd>
+                          {form.location}
+                          {form.specificPlace ? ` · ${form.specificPlace}` : ''}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Date &amp; Time</dt>
+                        <dd>
+                          {form.dateFound}
+                          {form.timeFound ? ` at ${form.timeFound}` : ''}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Custody Point</dt>
+                        <dd>{effectiveStorage}</dd>
+                      </div>
+                      <div className="full">
+                        <dt>Description</dt>
+                        <dd>{form.description}</dd>
+                      </div>
+                      {imagePreview && (
+                        <div className="full">
+                          <dt>Attached Photo</dt>
+                          <dd style={{ marginTop: '6px' }}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={imagePreview}
+                              alt="Attached item preview"
+                              style={{ width: '70px', height: '70px', borderRadius: '10px', objectFit: 'cover' }}
+                            />
+                          </dd>
+                        </div>
                       )}
-                    </button>
+                    </dl>
                   </div>
 
-                </form>
+                  <label className="confirm-check" onClick={() => setConfirmed(!confirmed)}>
+                    <input
+                      type="checkbox"
+                      checked={confirmed}
+                      onChange={(e) => setConfirmed(e.target.checked)}
+                    />
+                    <span>
+                      {confirmed && <Icon name="check" size={13} />}
+                    </span>
+                    <p>
+                      I confirm this information is accurate to the best of my knowledge.
+                    </p>
+                  </label>
 
+                  <div className="submit-note">
+                    <Icon name="bell" size={18} />
+                    <span>
+                      We’ll notify you if an owner claim needs your verification.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Form Navigation Actions */}
+              <div className="form-actions">
+                {step > 1 ? (
+                  <button
+                    type="button"
+                    className="button button-quiet"
+                    onClick={() => setStep(step - 1)}
+                    disabled={isSubmitting}
+                  >
+                    Back
+                  </button>
+                ) : (
+                  <span />
+                )}
+                <button
+                  type="button"
+                  className="button button-found"
+                  disabled={nextDisabled}
+                  onClick={() => (step < 4 ? setStep(step + 1) : handleSubmit())}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <span>Registering Item...</span>
+                    </>
+                  ) : step < 4 ? (
+                    <>
+                      <span>Continue</span>
+                      <Icon name="arrow" size={18} />
+                    </>
+                  ) : (
+                    <>
+                      <span>Submit Found Report</span>
+                      <Icon name="arrow" size={18} />
+                    </>
+                  )}
+                </button>
               </div>
             </div>
-
-            {/* Sidebar Finder Guidance (1 col) */}
-            <div className="space-y-6">
-              
-              {/* Card 1: Safe Custody Notice */}
-              <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-5 text-emerald-950">
-                <div className="flex items-center gap-2 font-bold text-xs mb-2 text-emerald-800">
-                  <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                  Campus Finder Protocol
-                </div>
-                <p className="text-xs leading-relaxed text-emerald-900/90">
-                  You are performing a great service to your campus community. Whenever possible, hand high-value electronics, wallets, or keys directly to Security staff or building receptionists.
-                </p>
-              </div>
-
-              {/* Card 2: Campus Safety Drop Desks */}
-              <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs">
-                <div className="flex items-center gap-2 text-indigo-600 font-bold text-xs mb-3">
-                  <Building2 className="h-4 w-4" />
-                  Authorized Turn-In Desks
-                </div>
-                <ul className="space-y-2.5 text-xs text-slate-600">
-                  <li className="flex items-start gap-2">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
-                    <span><strong>Campus Safety Desk:</strong> Main Security Office (24/7)</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
-                    <span><strong>6th Building Desk:</strong> Ground Floor Reception (8 AM – 6 PM)</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
-                    <span><strong>PCP / SBPIM Office:</strong> Department Office (9 AM – 5 PM)</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
-                    <span><strong>Hostel Office:</strong> Girls & Boys Hostel Security Desks</span>
-                  </li>
-                </ul>
-              </div>
-
-              {/* Card 3: Privacy Assurance */}
-              <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs mb-3">
-                  <Lock className="h-4 w-4" />
-                  Finder Privacy Protected
-                </div>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Your personal phone number and private student contact information are never shared with claimants without your explicit consent.
-                </p>
-              </div>
-
-            </div>
-
-          </div>
-        )}
-
-      </main>
+          </section>
+        </main>
+      )}
 
       <Footer />
     </div>

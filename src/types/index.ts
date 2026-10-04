@@ -24,6 +24,7 @@ export interface CampusItem {
   daysAgo?: number;
   status: ItemStatus;
   imageUrl?: string;
+  image?: string | null;
   storageLocation?: string; // Where security holds it, e.g. "Security Desk - Locker #14"
   isArchived?: boolean;
   archivedReason?: string;

@@ -78,6 +78,7 @@ export interface StudentMatchedItem {
     description: string;
     location: string;
     date: string;
+    time?: string | null;
     status: string;
     image?: string | null;
   };
@@ -88,6 +89,7 @@ export interface StudentMatchedItem {
     category: string;
     reportedLocation: string;
     reportedDate: string;
+    time?: string | null;
     image?: string | null;
     collectionPoint?: string | null;
   };
@@ -141,6 +143,7 @@ export async function getMyMatchedItems(): Promise<StudentMatchedItem[]> {
           description: true,
           location: true,
           date: true,
+          time: true,
           status: true,
           image: true,
         },
@@ -153,6 +156,7 @@ export async function getMyMatchedItems(): Promise<StudentMatchedItem[]> {
           category: true,
           location: true,
           date: true,
+          time: true,
           image: true,
           storageLocation: true,
         },
@@ -185,6 +189,7 @@ export async function getMyMatchedItems(): Promise<StudentMatchedItem[]> {
       description: m.lostItem.description,
       location: m.lostItem.location,
       date: m.lostItem.date.toISOString(),
+      time: m.lostItem.time,
       status: m.lostItem.status,
       image: m.lostItem.image,
     },
@@ -195,6 +200,7 @@ export async function getMyMatchedItems(): Promise<StudentMatchedItem[]> {
       category: m.foundItem.category,
       reportedLocation: m.foundItem.location,
       reportedDate: m.foundItem.date.toISOString(),
+      time: m.foundItem.time,
       image: m.foundItem.image,
       collectionPoint: m.foundItem.storageLocation,
     },
@@ -1244,3 +1250,307 @@ export async function getMyCollectedItems(): Promise<CollectedItemEntry[]> {
     notes: r.notes,
   }));
 }
+
+/**
+ * Server Action: Student accepts an admin-confirmed connection.
+ * Sets Return status to ARRANGED, logs audit entry, and notifies campus admins.
+ */
+export async function studentAcceptMatch(matchId: string): Promise<ActionResponse> {
+  const currentUser = await requireRole();
+
+  try {
+    const txResult = await prisma.$transaction(async (tx) => {
+      const match = await tx.match.findUnique({
+        where: { id: matchId },
+        include: {
+          lostItem: true,
+          foundItem: true,
+          return: true,
+        },
+      });
+
+      if (!match) {
+        throw new Error('Connection record not found.');
+      }
+
+      if (match.lostItem.reportedById !== currentUser.id) {
+        throw new Error('You do not have permission to accept this connection.');
+      }
+
+      if (match.status !== MatchStatus.CONFIRMED) {
+        throw new Error('This connection is no longer active.');
+      }
+
+      // Upsert return to ARRANGED status
+      const returnRow = await tx.return.upsert({
+        where: { matchId: match.id },
+        update: {
+          status: ReturnStatus.ARRANGED,
+          arrangedAt: new Date(),
+          notes: match.return?.notes || 'Match accepted by student. Ready for collection.',
+        },
+        create: {
+          matchId: match.id,
+          claimantId: currentUser.id,
+          status: ReturnStatus.ARRANGED,
+          arrangedAt: new Date(),
+          notes: 'Match accepted by student. Ready for collection.',
+        },
+      });
+
+      return {
+        matchId: match.id,
+        lostItemName: match.lostItem.name,
+        foundItemId: match.foundItemId,
+        returnRow,
+      };
+    }, { timeout: 15000, maxWait: 5000 });
+
+    await writeAuditLog({
+      actorId: currentUser.id,
+      action: 'STUDENT_MATCH_ACCEPTED',
+      targetType: 'MATCH',
+      targetId: matchId,
+      metadata: {
+        matchId,
+        studentName: currentUser.name,
+        item: txResult.lostItemName,
+      },
+    });
+
+    return {
+      success: true,
+      match: txResult.returnRow,
+    };
+  } catch (err: any) {
+    console.error('Error in studentAcceptMatch:', err);
+    return {
+      success: false,
+      error: err.message || 'Failed to accept connection.',
+    };
+  }
+}
+
+/**
+ * Server Action: Student rejects an admin-confirmed connection ("Not Mine").
+ * Sets match status to DISCONNECTED, cancels pending return, and reverts found item status to OPEN.
+ */
+export async function studentRejectMatch(
+  matchId: string,
+  reason?: string
+): Promise<ActionResponse> {
+  const currentUser = await requireRole();
+
+  try {
+    const cleanReason = reason?.trim() || 'Student indicated this is not their item.';
+
+    const txResult = await prisma.$transaction(async (tx) => {
+      const match = await tx.match.findUnique({
+        where: { id: matchId },
+        include: {
+          lostItem: true,
+          foundItem: true,
+        },
+      });
+
+      if (!match) {
+        throw new Error('Connection record not found.');
+      }
+
+      if (match.lostItem.reportedById !== currentUser.id) {
+        throw new Error('You do not have permission to reject this connection.');
+      }
+
+      // Disconnect match
+      await tx.match.update({
+        where: { id: matchId },
+        data: {
+          status: MatchStatus.DISCONNECTED,
+          disconnectedById: currentUser.id,
+          disconnectedAt: new Date(),
+          disconnectReason: cleanReason,
+        },
+      });
+
+      // Check if another confirmed match exists for found item
+      const otherConfirmed = await tx.match.findFirst({
+        where: {
+          foundItemId: match.foundItemId,
+          status: MatchStatus.CONFIRMED,
+          NOT: { id: matchId },
+        },
+      });
+
+      if (!otherConfirmed) {
+        await tx.item.update({
+          where: { id: match.foundItemId },
+          data: { status: ItemStatus.OPEN },
+        });
+      }
+
+      // Cancel return if exists
+      await tx.return.updateMany({
+        where: {
+          matchId,
+          status: { not: ReturnStatus.CONFIRMED },
+        },
+        data: {
+          status: ReturnStatus.CANCELLED,
+          notes: `Rejected by student: ${cleanReason}`,
+        },
+      });
+
+      return {
+        matchId: match.id,
+        lostItemName: match.lostItem.name,
+        foundItemId: match.foundItemId,
+      };
+    }, { timeout: 15000, maxWait: 5000 });
+
+    await writeAuditLog({
+      actorId: currentUser.id,
+      action: 'STUDENT_MATCH_REJECTED',
+      targetType: 'MATCH',
+      targetId: matchId,
+      metadata: {
+        matchId,
+        studentName: currentUser.name,
+        reason: cleanReason,
+      },
+    });
+
+    return {
+      success: true,
+    };
+  } catch (err: any) {
+    console.error('Error in studentRejectMatch:', err);
+    return {
+      success: false,
+      error: err.message || 'Failed to reject connection.',
+    };
+  }
+}
+
+/**
+ * Server Action: Student marks the item as Claimed & Collected.
+ * Sets Return to CONFIRMED, marks both Lost & Found items as RESOLVED,
+ * records audit log and notifies campus administration.
+ */
+export async function studentClaimItem(matchId: string): Promise<ActionResponse> {
+  const currentUser = await requireRole();
+
+  try {
+    const txResult = await prisma.$transaction(async (tx) => {
+      const match = await tx.match.findUnique({
+        where: { id: matchId },
+        include: {
+          lostItem: true,
+          foundItem: true,
+          return: true,
+        },
+      });
+
+      if (!match) {
+        throw new Error('Connection record not found.');
+      }
+
+      if (match.lostItem.reportedById !== currentUser.id) {
+        throw new Error('You do not have authorization to claim this item.');
+      }
+
+      // Update Return row to CONFIRMED
+      const returnRow = await tx.return.upsert({
+        where: { matchId },
+        update: {
+          status: ReturnStatus.CONFIRMED,
+          confirmedAt: new Date(),
+          notes: 'Item confirmed collected and claimed by student.',
+        },
+        create: {
+          matchId,
+          claimantId: currentUser.id,
+          status: ReturnStatus.CONFIRMED,
+          confirmedAt: new Date(),
+          notes: 'Item confirmed collected and claimed by student.',
+        },
+      });
+
+      // Mark both Lost and Found items as RESOLVED
+      await tx.item.update({
+        where: { id: match.foundItemId },
+        data: {
+          status: ItemStatus.RESOLVED,
+          returnedAt: new Date(),
+          returnedToId: currentUser.id,
+        },
+      });
+
+      await tx.item.update({
+        where: { id: match.lostItemId },
+        data: {
+          status: ItemStatus.RESOLVED,
+          returnedAt: new Date(),
+          returnedToId: currentUser.id,
+        },
+      });
+
+      return {
+        matchId: match.id,
+        lostItemId: match.lostItemId,
+        foundItemId: match.foundItemId,
+        lostItemName: match.lostItem.name,
+        returnRow,
+      };
+    }, { timeout: 15000, maxWait: 5000 });
+
+    // Write audit log
+    await writeAuditLog({
+      actorId: currentUser.id,
+      action: 'ITEM_CLAIMED_BY_STUDENT',
+      targetType: 'RETURN',
+      targetId: txResult.returnRow.id,
+      metadata: {
+        matchId,
+        claimantId: currentUser.id,
+        lostItemId: txResult.lostItemId,
+        foundItemId: txResult.foundItemId,
+        item: txResult.lostItemName,
+      },
+    });
+
+    // Notify administrators
+    try {
+      const admins = await prisma.user.findMany({
+        where: { role: { in: ['ADMIN', 'SECURITY'] } },
+        select: { id: true },
+        take: 10,
+      });
+
+      await Promise.all(
+        admins.map((admin) =>
+          createNotification({
+            userId: admin.id,
+            title: `Item Claimed: ${txResult.lostItemName}`,
+            message: `${currentUser.name} confirmed they collected and claimed their matched item #${txResult.foundItemId}. Item is now marked RESOLVED.`,
+            type: 'ITEM_HANDOVER_COMPLETED',
+            link: '/admin?tab=custody',
+          })
+        )
+      );
+    } catch (notifErr) {
+      console.error('Error notifying admins of claim:', notifErr);
+    }
+
+    return {
+      success: true,
+      match: txResult.returnRow,
+    };
+  } catch (err: any) {
+    console.error('Error in studentClaimItem:', err);
+    return {
+      success: false,
+      error: err.message || 'Failed to claim item.',
+    };
+  }
+}
+

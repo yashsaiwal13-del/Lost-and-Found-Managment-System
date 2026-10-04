@@ -149,3 +149,182 @@ export async function getAdminStudents(params?: {
     },
   };
 }
+
+export interface StudentAccountDetails {
+  id: string;
+  name: string;
+  email: string;
+  studentId: string | null;
+  role: string;
+  phone: string | null;
+  avatar: string | null;
+  createdAt: string;
+  lastLoginAt: string | null;
+  hasPassword: boolean;
+  passwordPreview: string;
+  reportedItems: {
+    id: string;
+    name: string;
+    type: string;
+    category: string;
+    status: string;
+    location: string;
+    date: string;
+    archived: boolean;
+    image?: string | null;
+  }[];
+  claims: {
+    id: string;
+    status: string;
+    createdAt: string;
+    item: {
+      id: string;
+      name: string;
+      type: string;
+      category: string;
+    };
+  }[];
+  verificationRequests: {
+    id: string;
+    status: string;
+    createdAt: string;
+    item: {
+      id: string;
+      name: string;
+    };
+    questionsCount: number;
+  }[];
+}
+
+/**
+ * Server Action: Fetches comprehensive profile details for a student account.
+ * ADMIN or SECURITY role required.
+ */
+export async function getStudentAccountDetails(studentId: string): Promise<StudentAccountDetails | null> {
+  await requireRole(['ADMIN', 'SECURITY']);
+
+  const user = await prisma.user.findUnique({
+    where: { id: studentId },
+    include: {
+      reportedItems: {
+        orderBy: { createdAt: 'desc' },
+      },
+      claims: {
+        include: {
+          item: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      },
+      verificationRequestsReceived: {
+        include: {
+          item: true,
+          questions: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      },
+    },
+  });
+
+  if (!user) return null;
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    studentId: user.studentId,
+    role: user.role,
+    phone: user.phone,
+    avatar: user.avatar,
+    createdAt: user.createdAt.toISOString(),
+    lastLoginAt: user.lastLoginAt?.toISOString() || null,
+    hasPassword: Boolean(user.password),
+    passwordPreview: user.password ? '●●●●●●●● (BCrypt Encrypted)' : 'No Password Set (OAuth)',
+    reportedItems: user.reportedItems.map((item) => ({
+      id: item.id,
+      name: item.name,
+      type: item.type,
+      category: item.category,
+      status: item.status,
+      location: item.location,
+      date: item.date.toISOString(),
+      archived: item.archived,
+      image: item.image,
+    })),
+    claims: user.claims.map((c) => ({
+      id: c.id,
+      status: c.status,
+      createdAt: c.createdAt.toISOString(),
+      item: {
+        id: c.item.id,
+        name: c.item.name,
+        type: c.item.type,
+        category: c.item.category,
+      },
+    })),
+    verificationRequests: user.verificationRequestsReceived.map((vr) => ({
+      id: vr.id,
+      status: vr.status,
+      createdAt: vr.createdAt.toISOString(),
+      item: {
+        id: vr.item.id,
+        name: vr.item.name,
+      },
+      questionsCount: vr.questions.length,
+    })),
+  };
+}
+
+/**
+ * Server Action: Deletes a student account.
+ * ADMIN or SECURITY role required.
+ */
+export async function deleteStudentAccount(studentId: string): Promise<{ success: boolean; error?: string }> {
+  const admin = await requireRole(['ADMIN', 'SECURITY']);
+
+  try {
+    const userToDelete = await prisma.user.findUnique({
+      where: { id: studentId },
+    });
+
+    if (!userToDelete) {
+      return { success: false, error: 'Student account not found.' };
+    }
+
+    if (userToDelete.role === 'ADMIN' && admin.id !== userToDelete.id) {
+      return { success: false, error: 'Cannot delete an administrator account.' };
+    }
+
+    // Disconnect optional relations before deletion to avoid SQLite constraint issues
+    await prisma.item.updateMany({
+      where: { archivedById: studentId },
+      data: { archivedById: null },
+    });
+    await prisma.match.updateMany({
+      where: { connectedById: studentId },
+      data: { connectedById: null },
+    });
+    await prisma.match.updateMany({
+      where: { disconnectedById: studentId },
+      data: { disconnectedById: null },
+    });
+    await prisma.return.updateMany({
+      where: { arrangedById: studentId },
+      data: { arrangedById: null },
+    });
+    await prisma.return.updateMany({
+      where: { confirmedById: studentId },
+      data: { confirmedById: null },
+    });
+
+    // Delete user (cascades reportedItems, claims, verificationRequests, notifications, auditLogs)
+    await prisma.user.delete({
+      where: { id: studentId },
+    });
+
+    return { success: true };
+  } catch (err: any) {
+    console.error('Failed to delete student account:', err);
+    return { success: false, error: err?.message || 'Failed to delete student account.' };
+  }
+}
+

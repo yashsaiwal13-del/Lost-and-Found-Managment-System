@@ -1,12 +1,10 @@
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
-import StudentDashboardClient from '@/components/dashboard/StudentDashboardClient';
+import { getStudentReports } from '@/app/actions/getStudentReports';
+import { getMyMatchedItems } from '@/app/actions/matching';
+import DashboardClient from '@/components/dashboard/DashboardClient';
 
-export default async function StudentDashboardPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ denied?: string; message?: string }>;
-}) {
+export default async function StudentDashboardPage() {
   const session = await auth();
 
   // If not logged in, redirect to login
@@ -21,16 +19,26 @@ export default async function StudentDashboardPage({
   }
 
   if (userRole === 'SECURITY') {
-    redirect('/security');
+    redirect('/admin?tab=claims');
   }
 
-  const { denied, message } = await searchParams;
+  // Fetch real student reports & matches in parallel
+  const [reports, matchedItems] = await Promise.all([
+    getStudentReports(),
+    getMyMatchedItems(),
+  ]);
 
   return (
-    <StudentDashboardClient 
-      user={session.user} 
-      denied={denied === 'true'} 
-      deniedMessage={message} 
+    <DashboardClient
+      user={{
+        id: session.user.id || '',
+        name: session.user.name || 'Student',
+        email: session.user.email || '',
+        studentId: (session.user as any).studentId,
+        role: userRole,
+      }}
+      reports={reports}
+      matchedItems={matchedItems}
     />
   );
 }
